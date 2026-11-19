@@ -7,7 +7,7 @@
 //! A dynamic z-fast trie on byte strings.
 
 mod check;
-mod key;
+pub(crate) mod key;
 mod map;
 
 use crate::utils::{HashPrefixes, PrefixHasher, Xxh3, fat_binary_search, jump, lcp, two_fattest};
@@ -184,13 +184,15 @@ impl Internal {
 }
 
 /// A leaf.
-struct Leaf {
+struct Leaf<V> {
     /// The key, or `None` if the leaf is free.
     key: Option<Key>,
     /// The leaf of the previous key, or [`NONE`].
     prev: u32,
     /// The leaf of the next key, or [`NONE`].
     next: u32,
+    /// The value associated with the key.
+    value: V,
 }
 
 /// The side of a jump pointer, or of the path it follows.
@@ -278,13 +280,13 @@ struct Loc {
 /// let keys: Vec<&[u8]> = trie.iter().collect();
 /// assert_eq!(keys, vec!["bar".as_bytes(), "foobar".as_bytes()]);
 /// ```
-pub struct ZFastTrie<H = Xxh3> {
+pub struct ZFastTrie<H = Xxh3, V = ()> {
     /// The internal nodes.
     internals: Vec<Internal>,
     /// The indices of the free internal nodes.
     free_internals: Vec<u32>,
     /// The leaves.
-    leaves: Vec<Leaf>,
+    leaves: Vec<Leaf<V>>,
     /// The indices of the free leaves.
     free_leaves: Vec<u32>,
     /// The sets of children that do not fit an internal node.
@@ -318,16 +320,16 @@ pub struct ZFastTrie<H = Xxh3> {
 // moved to another thread together, and reference counts are modified only by
 // methods taking a mutable reference (or ownership); methods taking a shared
 // reference just read the bytes.
-unsafe impl<H> Send for ZFastTrie<H> {}
-unsafe impl<H> Sync for ZFastTrie<H> {}
+unsafe impl<H, V: Send> Send for ZFastTrie<H, V> {}
+unsafe impl<H, V: Sync> Sync for ZFastTrie<H, V> {}
 
-impl<H: HashPrefixes> Default for ZFastTrie<H> {
+impl<H: HashPrefixes, V: Copy> Default for ZFastTrie<H, V> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: HashPrefixes> ZFastTrie<H> {
+impl<H: HashPrefixes, V: Copy> ZFastTrie<H, V> {
     /// The maximum length of a key.
     pub const MAX_KEY_LEN: usize = (1 << 31) - 2;
 
@@ -394,7 +396,7 @@ impl<H: HashPrefixes> ZFastTrie<H> {
     pub fn mem_size(&self) -> usize {
         size_of::<Self>()
             + self.internals.capacity() * size_of::<Internal>()
-            + self.leaves.capacity() * size_of::<Leaf>()
+            + self.leaves.capacity() * size_of::<Leaf<V>>()
             + (self.free_internals.capacity()
                 + self.free_leaves.capacity()
                 + self.free_big.capacity()
@@ -439,12 +441,12 @@ impl<H: HashPrefixes> ZFastTrie<H> {
     }
 
     #[inline(always)]
-    fn leaf(&self, id: u32) -> &Leaf {
+    fn leaf(&self, id: u32) -> &Leaf<V> {
         &self.leaves[leaf_index(id)]
     }
 
     #[inline(always)]
-    fn leaf_mut(&mut self, id: u32) -> &mut Leaf {
+    fn leaf_mut(&mut self, id: u32) -> &mut Leaf<V> {
         &mut self.leaves[leaf_index(id)]
     }
 
@@ -858,6 +860,25 @@ impl<H: HashPrefixes> ZFastTrie<H> {
         self.key_of(self.next_leaf(if found != NONE { found } else { pred }))
     }
 
+    /// Returns the largest key that is smaller than or equal to `x`, and
+    /// its value, if any.
+    #[inline]
+    pub(crate) fn pred_entry(&self, x: &[u8]) -> Option<(&[u8], V)> {
+        let (pred, found) = self.pred_leaf(x);
+        let leaf = if found != NONE { found } else { pred };
+        (leaf != NONE).then(|| (self.leaf_key(leaf), self.leaf(leaf).value))
+    }
+
+    /// Returns the smallest key larger than the given one, which must be in
+    /// the trie, and its value, if any.
+    #[inline]
+    pub(crate) fn next_entry(&self, x: &[u8]) -> Option<(&[u8], V)> {
+        let (_, found) = self.pred_leaf(x);
+        debug_assert!(found != NONE);
+        let leaf = self.leaf(found).next;
+        (leaf != NONE).then(|| (self.leaf_key(leaf), self.leaf(leaf).value))
+    }
+
     /// Returns the smallest key, if any.
     #[inline]
     pub fn first(&self) -> Option<&[u8]> {
@@ -871,7 +892,7 @@ impl<H: HashPrefixes> ZFastTrie<H> {
     }
 
     /// Returns an iterator on the keys in lexicographic order.
-    pub fn iter(&self) -> Iter<'_, H> {
+    pub fn iter(&self) -> Iter<'_, H, V> {
         Iter {
             trie: self,
             front: self.first,
@@ -900,11 +921,12 @@ impl<H: HashPrefixes> ZFastTrie<H> {
 
     // Allocation
 
-    fn new_leaf(&mut self, x: &[u8]) -> u32 {
+    fn new_leaf(&mut self, x: &[u8], value: V) -> u32 {
         let leaf = Leaf {
             key: Some(Key::new(x)),
             prev: NONE,
             next: NONE,
+            value,
         };
         match self.free_leaves.pop() {
             Some(i) => {
@@ -1143,17 +1165,17 @@ impl<H: HashPrefixes> ZFastTrie<H> {
 
     // Updates
 
-    /// Adds a key to the set, returning true if the key was not already in
-    /// the set.
+    /// Adds a key with an associated value, returning true if the key was
+    /// not already present (otherwise, nothing happens).
     ///
     /// # Panics
     ///
     /// If the key is longer than [`MAX_KEY_LEN`](Self::MAX_KEY_LEN) bytes.
-    pub fn insert(&mut self, x: impl AsRef<[u8]>) -> bool {
+    pub(crate) fn insert_with(&mut self, x: impl AsRef<[u8]>, value: V) -> bool {
         let x = x.as_ref();
         assert!(x.len() <= Self::MAX_KEY_LEN, "key too long");
         if self.root == NONE {
-            let leaf = self.new_leaf(x);
+            let leaf = self.new_leaf(x, value);
             self.root = leaf;
             self.first = leaf;
             self.last = leaf;
@@ -1167,13 +1189,13 @@ impl<H: HashPrefixes> ZFastTrie<H> {
         self.check_stack(x, &loc);
 
         if loc.exit == NONE {
-            self.insert_child(x, loc.parex);
+            self.insert_child(x, loc.parex, value);
         } else {
             let extent = self.extent(loc.exit);
             if is_leaf(loc.exit) && loc.lcp == x.len() && extent.len() == x.len() {
                 return false;
             }
-            self.insert_split(x, loc);
+            self.insert_split(x, loc, value);
         }
         self.len += 1;
         true
@@ -1181,14 +1203,14 @@ impl<H: HashPrefixes> ZFastTrie<H> {
 
     /// Adds the key `x` as a new child of the node `parex`, whose extent is
     /// a prefix of `x`.
-    fn insert_child(&mut self, x: &[u8], parex: u32) {
+    fn insert_child(&mut self, x: &[u8], parex: u32, value: V) {
         let extent = self.internal(parex).extent_len as usize;
         let sym = sym_at(x, extent);
         let children = self.children(parex);
         let (i, _) = children.position(sym);
         let (len, first, last) = (children.ids.len(), children.first(), children.last());
         let prev = if i > 0 { children.ids[i - 1] } else { NONE };
-        let leaf = self.new_leaf(x);
+        let leaf = self.new_leaf(x, value);
 
         if i == 0 {
             self.link_before(self.extreme_leaf(first, Side::Left), leaf);
@@ -1207,7 +1229,7 @@ impl<H: HashPrefixes> ZFastTrie<H> {
 
     /// Adds the key `x`, which exits at `loc.exit`, by splitting the exit
     /// node.
-    fn insert_split(&mut self, x: &[u8], loc: Loc) {
+    fn insert_split(&mut self, x: &[u8], loc: Loc, value: V) {
         let Loc {
             parex,
             exit,
@@ -1247,7 +1269,7 @@ impl<H: HashPrefixes> ZFastTrie<H> {
             (children.first() == exit, children.last() == exit)
         };
 
-        let leaf = self.new_leaf(x);
+        let leaf = self.new_leaf(x, value);
         let (leaf_byte, exit_byte) = (
             sym.saturating_sub(1) as u8,
             exit_sym.saturating_sub(1) as u8,
@@ -1485,7 +1507,19 @@ impl<H: HashPrefixes> ZFastTrie<H> {
     }
 }
 
-impl<H: HashPrefixes> fmt::Debug for ZFastTrie<H> {
+impl<H: HashPrefixes> ZFastTrie<H> {
+    /// Adds a key to the set, returning true if the key was not already in
+    /// the set.
+    ///
+    /// # Panics
+    ///
+    /// If the key is longer than [`MAX_KEY_LEN`](Self::MAX_KEY_LEN) bytes.
+    pub fn insert(&mut self, x: impl AsRef<[u8]>) -> bool {
+        self.insert_with(x, ())
+    }
+}
+
+impl<H: HashPrefixes, V: Copy> fmt::Debug for ZFastTrie<H, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_set().entries(self.iter()).finish()
     }
@@ -1507,9 +1541,9 @@ impl<H: HashPrefixes, B: AsRef<[u8]>> FromIterator<B> for ZFastTrie<H> {
     }
 }
 
-impl<'a, H: HashPrefixes> IntoIterator for &'a ZFastTrie<H> {
+impl<'a, H: HashPrefixes, V: Copy> IntoIterator for &'a ZFastTrie<H, V> {
     type Item = &'a [u8];
-    type IntoIter = Iter<'a, H>;
+    type IntoIter = Iter<'a, H, V>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -1517,14 +1551,14 @@ impl<'a, H: HashPrefixes> IntoIterator for &'a ZFastTrie<H> {
 }
 
 /// An iterator on the keys of a [`ZFastTrie`] in lexicographic order.
-pub struct Iter<'a, H> {
-    trie: &'a ZFastTrie<H>,
+pub struct Iter<'a, H, V = ()> {
+    trie: &'a ZFastTrie<H, V>,
     front: u32,
     back: u32,
     remaining: usize,
 }
 
-impl<'a, H: HashPrefixes> Iterator for Iter<'a, H> {
+impl<'a, H: HashPrefixes, V: Copy> Iterator for Iter<'a, H, V> {
     type Item = &'a [u8];
 
     #[inline]
@@ -1544,7 +1578,7 @@ impl<'a, H: HashPrefixes> Iterator for Iter<'a, H> {
     }
 }
 
-impl<H: HashPrefixes> DoubleEndedIterator for Iter<'_, H> {
+impl<H: HashPrefixes, V: Copy> DoubleEndedIterator for Iter<'_, H, V> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.remaining == 0 {
@@ -1557,6 +1591,6 @@ impl<H: HashPrefixes> DoubleEndedIterator for Iter<'_, H> {
     }
 }
 
-impl<H: HashPrefixes> ExactSizeIterator for Iter<'_, H> {}
+impl<H: HashPrefixes, V: Copy> ExactSizeIterator for Iter<'_, H, V> {}
 
-impl<H: HashPrefixes> std::iter::FusedIterator for Iter<'_, H> {}
+impl<H: HashPrefixes, V: Copy> std::iter::FusedIterator for Iter<'_, H, V> {}

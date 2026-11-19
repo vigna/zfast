@@ -43,7 +43,7 @@ use std::io::Write;
 use std::ops::Bound::{Included, Unbounded};
 use std::time::Instant;
 use zfast::utils::{Chain, HashPrefixes, Xxh3};
-use zfast::{KeySeq, PackedKeys, StaticZFastTrie, ZFastTrie};
+use zfast::{KeySeq, PackedKeys, StaticZFastTrie, ZFastSet, ZFastTrie};
 
 /// Writes a sequence of keys as length-prefixed records.
 fn write(keys: &PackedKeys, path: &str) -> std::io::Result<()> {
@@ -80,12 +80,18 @@ fn rss() -> usize {
 struct Runner<'a> {
     method: &'a str,
     reps: usize,
+    /// If nonempty, only the query phases whose name contains this string
+    /// are run (useful for profiling).
+    only: String,
 }
 
 impl Runner<'_> {
     /// Runs `f` on all queries, printing the best time per query over the
     /// given number of repetitions and the sum of the results.
     fn time(&self, op: &str, reps: usize, queries: &PackedKeys, mut f: impl FnMut(&[u8]) -> usize) {
+        if reps > 1 && !op.contains(&self.only) {
+            return;
+        }
         let mut best = f64::INFINITY;
         let mut sum = 0;
         for _ in 0..reps {
@@ -129,6 +135,21 @@ fn run_trie<H: HashPrefixes>(r: &Runner, keys: &PackedKeys, hits: &PackedKeys, m
     let sum = trie.iter().map(<[u8]>::len).sum::<usize>();
     r.result("iterate", keys.len(), start.elapsed().as_nanos() as f64 / keys.len() as f64, sum);
     r.time("remove", 1, hits, |k| trie.remove(k) as usize);
+}
+
+fn run_set<H: HashPrefixes>(r: &Runner, keys: &PackedKeys, hits: &PackedKeys, misses: &PackedKeys) {
+    let before = rss();
+    let mut set = <ZFastSet<H>>::new();
+    r.time("insert", 1, keys, |k| set.insert(k) as usize);
+    r.space(keys.len(), set.mem_size(), rss().saturating_sub(before));
+    r.time("contains-hit", r.reps, hits, |k| set.contains(k) as usize);
+    r.time("contains-miss", r.reps, misses, |k| set.contains(k) as usize);
+    r.time("succ-hit", r.reps, hits, |k| set.succ(k).map_or(0, <[u8]>::len));
+    r.time("succ-miss", r.reps, misses, |k| set.succ(k).map_or(0, <[u8]>::len));
+    let start = Instant::now();
+    let sum = set.iter().map(<[u8]>::len).sum::<usize>();
+    r.result("iterate", keys.len(), start.elapsed().as_nanos() as f64 / keys.len() as f64, sum);
+    r.time("remove", 1, hits, |k| set.remove(k) as usize);
 }
 
 fn run_btree(r: &Runner, keys: &PackedKeys, hits: &PackedKeys, misses: &PackedKeys) {
@@ -219,7 +240,7 @@ fn run_bsearch(r: &Runner, keys: &PackedKeys, hits: &PackedKeys, misses: &Packed
 fn usage() -> ! {
     eprintln!("Usage: zfast-bench gen KEYS N PREFIX");
     eprintln!("       zfast-bench run METHOD PREFIX REPS");
-    eprintln!("Methods: zft, zft-chain, btree, bsearch, szft:RATIO, szft-ef:RATIO, szft-chain:RATIO");
+    eprintln!("Methods: zset, zft, zft-chain, btree, bsearch, szft:RATIO, szft-ef:RATIO, szft-chain:RATIO");
     std::process::exit(1)
 }
 
@@ -243,12 +264,15 @@ fn main() {
                 read(&format!("{prefix}.misses")),
             );
             let method = args[2].as_str();
-            let r = Runner { method, reps };
+            let only = std::env::var("ZFAST_ONLY").unwrap_or_default();
+            let r = Runner { method, reps, only };
             let (name, ratio) = match method.split_once(':') {
                 Some((name, ratio)) => (name, ratio.parse().unwrap_or_else(|_| usage())),
                 None => (method, 1),
             };
             match name {
+                "zset" => run_set::<Xxh3>(&r, &keys, &hits, &misses),
+                "zset-chain" => run_set::<Chain>(&r, &keys, &hits, &misses),
                 "zft" => run_trie::<Xxh3>(&r, &keys, &hits, &misses),
                 "zft-chain" => run_trie::<Chain>(&r, &keys, &hits, &misses),
                 "btree" => run_btree(&r, &keys, &hits, &misses),

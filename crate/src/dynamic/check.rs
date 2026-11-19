@@ -9,7 +9,7 @@
 use super::*;
 use std::collections::HashMap;
 
-impl<H: HashPrefixes> ZFastTrie<H> {
+impl<H: HashPrefixes, V: Copy> ZFastTrie<H, V> {
     /// Checks all the invariants of the structure, recomputing naively
     /// names, extents, handles, signatures, and jump pointers.
     ///

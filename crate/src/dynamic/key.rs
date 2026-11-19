@@ -24,7 +24,7 @@ use std::ptr::NonNull;
 /// The reference count is not atomic. Sharing is always explicit (there is
 /// no `Clone` implementation), and it happens only in methods of the trie
 /// that take a mutable reference.
-pub(super) struct Key(NonNull<u32>);
+pub(crate) struct Key(NonNull<u32>);
 
 /// The size in bytes of the header (reference count and length).
 const HEADER: usize = 8;

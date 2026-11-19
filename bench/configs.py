@@ -20,6 +20,10 @@ SPACE lines (see zfast-bench/src/main.rs).
 """
 
 METHODS = {
+    "ZFastSet": {
+        "tool": "rust", "arg": "zset", "kind": "dynamic",
+        "label": "z-fast set (bucketed)",
+    },
     "ZFastTrie": {
         "tool": "rust", "arg": "zft", "kind": "dynamic",
         "label": "z-fast trie",

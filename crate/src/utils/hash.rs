@@ -20,6 +20,7 @@
 //!   bytes that are already part of the state), and *f* itself.
 
 use mem_dbg::{MemDbg, MemSize};
+use std::mem::MaybeUninit;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
 /// A strategy to hash the prefixes of a key.
@@ -179,7 +180,10 @@ const fn finish(state: u64, tail: u64, f: usize) -> u64 {
 pub struct ChainHasher<'a> {
     key: &'a [u8],
     limit: usize,
-    inline: [u64; INLINE],
+    /// The states, if there are at most [`INLINE`] of them: only the first
+    /// `limit / 8 + 1` are initialized.
+    inline: [MaybeUninit<u64>; INLINE],
+    /// The states, otherwise.
     heap: Vec<u64>,
 }
 
@@ -195,30 +199,34 @@ impl HashPrefixes for Chain {
         finish(state, tail(key, f), f)
     }
 
-    #[inline]
+    #[inline(always)]
     fn hasher(key: &[u8], limit: usize, seed: u64) -> ChainHasher<'_> {
         assert!(limit <= key.len());
         let n = limit / 8;
-        let mut inline = [0; INLINE];
-        let mut heap = Vec::new();
-        let states = if n < INLINE {
-            &mut inline[..]
-        } else {
-            heap.resize(n + 1, 0);
-            &mut heap[..]
-        };
-        let mut state = seed;
-        states[0] = state;
-        for (i, w) in key[..8 * n].chunks_exact(8).enumerate() {
-            state = step(state, u64::from_le_bytes(w.try_into().unwrap()));
-            states[i + 1] = state;
-        }
-        ChainHasher {
+        // We do not initialize the states that we will not use, and the
+        // method is always inlined, so the states are written in place
+        let mut hasher = ChainHasher {
             key,
             limit,
-            inline,
-            heap,
+            inline: [MaybeUninit::uninit(); INLINE],
+            heap: Vec::new(),
+        };
+        let mut state = seed;
+        if n < INLINE {
+            hasher.inline[0].write(state);
+            for (i, w) in key[..8 * n].chunks_exact(8).enumerate() {
+                state = step(state, u64::from_le_bytes(w.try_into().unwrap()));
+                hasher.inline[i + 1].write(state);
+            }
+        } else {
+            hasher.heap.reserve_exact(n + 1);
+            hasher.heap.push(state);
+            for w in key[..8 * n].chunks_exact(8) {
+                state = step(state, u64::from_le_bytes(w.try_into().unwrap()));
+                hasher.heap.push(state);
+            }
         }
+        hasher
     }
 }
 
@@ -228,7 +236,9 @@ impl PrefixHasher for ChainHasher<'_> {
         debug_assert!(f <= self.limit);
         let k = f / 8;
         let state = if self.heap.is_empty() {
-            self.inline[k]
+            assert!(f <= self.limit);
+            // SAFETY: the first limit / 8 + 1 states are initialized
+            unsafe { self.inline[k].assume_init() }
         } else {
             self.heap[k]
         };
