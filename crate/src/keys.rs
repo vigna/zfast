@@ -6,6 +6,7 @@
 
 //! Random-access sequences of byte strings.
 
+use crate::utils::prefetch;
 use mem_dbg::{MemDbg, MemSize};
 use sux::traits::{IndexedSeq, Types};
 
@@ -66,6 +67,19 @@ pub trait KeySeq {
     #[inline(always)]
     fn key_at(&self, pos: usize) -> Self::Key<'_> {
         self.key(pos)
+    }
+
+    /// Hints that the keys with index in [`from` . . `to`) are about to be
+    /// accessed.
+    ///
+    /// Implementations for which nearby keys are stored close to each other
+    /// can prefetch the relevant part of memory, so that a subsequent search
+    /// among those keys causes cache misses that are served in parallel,
+    /// rather than one after the other. The default implementation does
+    /// nothing.
+    #[inline(always)]
+    fn prefetch_range(&self, from: usize, to: usize) {
+        let _ = (from, to);
     }
 }
 
@@ -259,6 +273,26 @@ where
         let start = pos + LEN_BYTES;
         let len = u32::from_le_bytes(bytes[pos..start].try_into().unwrap()) as usize;
         &bytes[start..start + len]
+    }
+
+    #[inline]
+    fn prefetch_range(&self, from: usize, to: usize) {
+        /// The maximum number of cache lines we prefetch.
+        const MAX_LINES: usize = 64;
+        if from >= to {
+            return;
+        }
+        let bytes = self.bytes.as_ref();
+        let start = self.offsets.get(from);
+        let end = if to < self.len() {
+            self.offsets.get(to)
+        } else {
+            bytes.len()
+        };
+        let end = end.min(start + 64 * MAX_LINES);
+        for line in (start..end).step_by(64) {
+            prefetch(bytes.as_ptr().wrapping_add(line));
+        }
     }
 }
 

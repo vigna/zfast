@@ -58,23 +58,25 @@ fn check<H: HashPrefixes>(sig_bits: u32, sizes: &[usize], queries: usize) -> Res
     for shape in SHAPES {
         for &n in sizes {
             let keys = gen_set(&mut rng, shape, n);
-            let packed: PackedKeys = keys.iter().collect();
-            let trie = <StaticZFastTrie<_, H>>::with_sig_bits(packed, sig_bits)?;
-            // The same structure with directories based on Elias-Fano
-            let ef = trie.clone().into_ef();
-            assert_eq!(trie.len(), keys.len());
-            assert_eq!(ef.len(), keys.len());
-            for (i, key) in keys.iter().enumerate() {
-                assert_eq!(trie.key(i), key);
-                check_query(&trie, &keys, key);
-                check_query(&ef, &keys, key);
-            }
-            check_query(&trie, &keys, &[]);
-            check_query(&ef, &keys, &[]);
-            for _ in 0..queries {
-                let query = gen_query(&mut rng, shape, &keys);
-                check_query(&trie, &keys, &query);
-                check_query(&ef, &keys, &query);
+            for ratio in [1, 2, 3, 8, 64] {
+                let packed: PackedKeys = keys.iter().collect();
+                let trie = <StaticZFastTrie<_, H>>::with_sig_bits(packed, ratio, sig_bits)?;
+                // The same structure with directories based on Elias-Fano
+                let ef = trie.clone().into_ef();
+                assert_eq!(trie.len(), keys.len());
+                assert_eq!(ef.len(), keys.len());
+                for (i, key) in keys.iter().enumerate() {
+                    assert_eq!(trie.key(i), key);
+                    check_query(&trie, &keys, key);
+                    check_query(&ef, &keys, key);
+                }
+                check_query(&trie, &keys, &[]);
+                check_query(&ef, &keys, &[]);
+                for _ in 0..queries / 4 {
+                    let query = gen_query(&mut rng, shape, &keys);
+                    check_query(&trie, &keys, &query);
+                    check_query(&ef, &keys, &query);
+                }
             }
         }
     }
@@ -134,6 +136,14 @@ fn test_unsorted() {
         <StaticZFastTrie<_>>::new(keys).err(),
         Some(BuildError::Unsorted(1))
     );
+    // With sampling, all keys are checked anyway
+    for ratio in [2, 3, 4, 5] {
+        let keys: PackedKeys = ["a", "b", "c", "e", "d", "f"].into_iter().collect();
+        assert_eq!(
+            <StaticZFastTrie<_>>::with_ratio(keys, ratio).err(),
+            Some(BuildError::Unsorted(4))
+        );
+    }
 }
 
 #[test]
@@ -142,7 +152,7 @@ fn test_load_factors() -> Result<()> {
     let keys = gen_set(&mut rng, Shape::Clustered, 3000);
     for load_factor in [0.1, 0.5, 0.9, 0.99] {
         let packed: PackedKeys = keys.iter().collect();
-        let trie = <StaticZFastTrie<_>>::with_load_factor(packed, load_factor)?;
+        let trie = <StaticZFastTrie<_>>::with_load_factor(packed, 2, load_factor)?;
         for _ in 0..3000 {
             check_query(&trie, &keys, &gen_query(&mut rng, Shape::Clustered, &keys));
         }

@@ -154,6 +154,9 @@ impl std::error::Error for BuildError {}
 pub struct StaticZFastTrie<K, H = Xxh3, S = Box<[Slot]>, D = PackedDirs> {
     /// The keys.
     keys: K,
+    /// The sampling ratio: the trie indexes the keys whose rank is a
+    /// multiple of this number.
+    ratio: usize,
     /// The z-map: an open-addressing table with linear probing.
     slots: S,
     /// The directories of the internal nodes.
@@ -179,6 +182,7 @@ impl<K: Clone, H, S: Clone, D: Clone> Clone for StaticZFastTrie<K, H, S, D> {
     fn clone(&self) -> Self {
         Self {
             keys: self.keys.clone(),
+            ratio: self.ratio,
             slots: self.slots.clone(),
             dirs: self.dirs.clone(),
             root: self.root,
@@ -189,6 +193,41 @@ impl<K: Clone, H, S: Clone, D: Clone> Clone for StaticZFastTrie<K, H, S, D> {
             sig_mask: self.sig_mask,
             _marker: PhantomData,
         }
+    }
+}
+
+/// A view of a sequence of keys containing only the keys whose index is a
+/// multiple of a given ratio.
+#[derive(Debug)]
+struct Sampled<'a, K> {
+    keys: &'a K,
+    ratio: usize,
+}
+
+impl<'a, K: KeySeq> KeySeq for Sampled<'a, K> {
+    type Key<'b>
+        = K::Key<'a>
+    where
+        Self: 'b;
+
+    #[inline(always)]
+    fn num_keys(&self) -> usize {
+        self.keys.num_keys().div_ceil(self.ratio)
+    }
+
+    #[inline(always)]
+    fn key(&self, index: usize) -> K::Key<'a> {
+        self.keys.key(index * self.ratio)
+    }
+
+    #[inline(always)]
+    fn pos(&self, index: usize) -> usize {
+        self.keys.pos(index * self.ratio)
+    }
+
+    #[inline(always)]
+    fn key_at(&self, pos: usize) -> K::Key<'a> {
+        self.keys.key_at(pos)
     }
 }
 
@@ -215,8 +254,8 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
     /// The default load factor of the z-map.
     pub const DEFAULT_LOAD_FACTOR: f64 = 0.6;
 
-    /// Creates a new static z-fast trie for the given keys using the
-    /// [default load factor](Self::DEFAULT_LOAD_FACTOR).
+    /// Creates a new static z-fast trie indexing all the given keys, using
+    /// the [default load factor](Self::DEFAULT_LOAD_FACTOR).
     ///
     /// # Errors
     ///
@@ -224,11 +263,35 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
     /// increasing lexicographic order, or if there are more than 2³² − 2 keys
     /// or a key is longer than 2³¹ − 2 bytes.
     pub fn new(keys: K) -> Result<Self, BuildError> {
-        Self::with_load_factor(keys, Self::DEFAULT_LOAD_FACTOR)
+        Self::with_ratio(keys, 1)
     }
 
-    /// Creates a new static z-fast trie for the given keys using the given
-    /// load factor for the z-map.
+    /// Creates a new static z-fast trie for the given keys with the given
+    /// sampling ratio, using the [default load factor](Self::DEFAULT_LOAD_FACTOR).
+    ///
+    /// The trie indexes just the keys whose rank is a multiple of the ratio,
+    /// and queries are completed by a binary search among the keys between two
+    /// consecutive indexed keys. The space used by the index is thus divided
+    /// by the ratio; moreover, as long as the index fits a faster level of
+    /// the memory hierarchy than the keys, and consecutive keys are stored
+    /// close to each other (as it happens with
+    /// [`PackedKeys`](crate::PackedKeys)), queries are usually *faster* with
+    /// a moderate ratio (say, 8 or 16) than with ratio one.
+    ///
+    /// # Errors
+    ///
+    /// See [`new`](Self::new).
+    ///
+    /// # Panics
+    ///
+    /// If the ratio is zero.
+    pub fn with_ratio(keys: K, ratio: usize) -> Result<Self, BuildError> {
+        Self::with_load_factor(keys, ratio, Self::DEFAULT_LOAD_FACTOR)
+    }
+
+    /// Creates a new static z-fast trie for the given keys with the given
+    /// [sampling ratio](Self::with_ratio), using the given load factor for the
+    /// z-map.
     ///
     /// Smaller load factors make queries faster and the structure larger.
     ///
@@ -238,33 +301,54 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
     ///
     /// # Panics
     ///
-    /// If the load factor is not in the interval (0 . . 1).
-    pub fn with_load_factor(keys: K, load_factor: f64) -> Result<Self, BuildError> {
-        Self::build(keys, load_factor, u32::MAX)
+    /// If the ratio is zero, or if the load factor is not in the interval
+    /// (0 . . 1).
+    pub fn with_load_factor(keys: K, ratio: usize, load_factor: f64) -> Result<Self, BuildError> {
+        Self::build(keys, ratio, load_factor, u32::MAX)
     }
 
-    /// Creates a new static z-fast trie whose signatures have the given
-    /// number of bits.
+    /// Creates a new static z-fast trie with the given sampling ratio whose
+    /// signatures have the given number of bits.
     ///
     /// This method is useful only to test the behavior of the structure in
     /// the presence of signature collisions.
     #[doc(hidden)]
-    pub fn with_sig_bits(keys: K, sig_bits: u32) -> Result<Self, BuildError> {
+    pub fn with_sig_bits(keys: K, ratio: usize, sig_bits: u32) -> Result<Self, BuildError> {
         assert!(sig_bits <= 32);
         let sig_mask = if sig_bits == 32 {
             u32::MAX
         } else {
             (1 << sig_bits) - 1
         };
-        Self::build(keys, Self::DEFAULT_LOAD_FACTOR, sig_mask)
+        Self::build(keys, ratio, Self::DEFAULT_LOAD_FACTOR, sig_mask)
     }
 
-    fn build(keys: K, load_factor: f64, sig_mask: u32) -> Result<Self, BuildError> {
-        assert!(load_factor > 0.0 && load_factor < 1.0);
-        let n = keys.num_keys();
-        if n >= EMPTY as usize {
+    fn build(
+        all_keys: K,
+        ratio: usize,
+        load_factor: f64,
+        sig_mask: u32,
+    ) -> Result<Self, BuildError> {
+        assert!(ratio > 0);
+        if all_keys.num_keys() >= EMPTY as usize {
             return Err(BuildError::TooLarge);
         }
+        if ratio > 1 {
+            // The construction checks only the order of the sampled keys
+            for i in 1..all_keys.num_keys() {
+                let (prev, next) = (all_keys.key(i - 1), all_keys.key(i));
+                if prev.as_ref() >= next.as_ref() {
+                    return Err(BuildError::Unsorted(i));
+                }
+            }
+        }
+        let keys = Sampled {
+            keys: &all_keys,
+            ratio,
+        };
+
+        assert!(load_factor > 0.0 && load_factor < 1.0);
+        let n = keys.num_keys();
         let seed = SEED;
         let mut dirs = PackedDirsBuilder::default();
         let mut entries = Vec::<(u64, Slot)>::new();
@@ -292,7 +376,7 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
                 }
                 let l = lcp(prev, next);
                 if l == next.len() || l < prev.len() && prev[l] > next[l] {
-                    return Err(BuildError::Unsorted(i));
+                    return Err(BuildError::Unsorted(i * ratio));
                 }
                 Some(l)
             } else {
@@ -378,7 +462,8 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
             slots[pos] = entry;
         }
         Ok(Self {
-            keys,
+            keys: all_keys,
+            ratio,
             slots,
             dirs: dirs.build(),
             root,
@@ -432,6 +517,7 @@ impl<K, H, S, D> StaticZFastTrie<K, H, S, D> {
         }
         StaticZFastTrie {
             keys: self.keys,
+            ratio: self.ratio,
             slots,
             dirs: dirs(self.dirs),
             root,
@@ -528,9 +614,75 @@ impl<K: KeySeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> StaticZFastTrie<K, H
     /// This is the method on which all queries are based.
     #[inline]
     fn locate(&self, x: &[u8]) -> Located {
-        let n = self.keys.num_keys();
+        let located = self.locate_sampled(x);
+        if self.ratio == 1 {
+            located
+        } else {
+            self.refine(x, located)
+        }
+    }
+
+    /// Turns the result of a query on the sampled keys into the result of
+    /// the same query on all the keys.
+    #[inline]
+    fn refine(&self, x: &[u8], (rank, found, range): Located) -> Located {
+        let (n, ratio) = (self.keys.num_keys(), self.ratio);
+        // Returns the first index in [lo . . hi) whose key satisfies the
+        // predicate, which must be monotone, or hi
+        let first = |mut lo: usize, mut hi: usize, pred: &dyn Fn(&[u8]) -> bool| {
+            while lo < hi {
+                let mid = lo + (hi - lo) / 2;
+                if pred(self.keys.key(mid).as_ref()) {
+                    hi = mid;
+                } else {
+                    lo = mid + 1;
+                }
+            }
+            lo
+        };
+        let (start, found) = if found {
+            (rank * ratio, true)
+        } else if rank == 0 {
+            (0, false)
+        } else {
+            // The key sampled at rank - 1 is smaller than x, and the one
+            // sampled at rank, if any, is larger
+            self.keys
+                .prefetch_range((rank - 1) * ratio + 1, n.min(rank * ratio));
+            let start = first((rank - 1) * ratio + 1, n.min(rank * ratio), &|key| key >= x);
+            (
+                start,
+                start < n.min(rank * ratio) && self.keys.key(start).as_ref() == x,
+            )
+        };
+        let end = if range.is_empty() {
+            // No sampled key starts with x: the keys starting with x come
+            // before the next sampled key
+            first(start, n.min(rank * ratio), &|key| !key.starts_with(x))
+        } else {
+            // The keys starting with x end after the last sampled key that
+            // starts with x, and before the next sampled key
+            first(
+                (range.end - 1) * ratio + 1,
+                n.min(range.end * ratio),
+                &|key| !key.starts_with(x),
+            )
+        };
+        (start, found, start..end)
+    }
+
+    /// Returns the number of sampled keys smaller than `x`, whether `x` is
+    /// a sampled key, and the interval of ranks (among sampled keys) of the
+    /// sampled keys that have `x` as a prefix.
+    #[inline(always)]
+    fn locate_sampled(&self, x: &[u8]) -> Located {
+        let keys = Sampled {
+            keys: &self.keys,
+            ratio: self.ratio,
+        };
+        let n = keys.num_keys();
         if n < 2 {
-            return self.locate_slow(x);
+            return Self::locate_slow(&keys, x);
         }
         let l = lcp(x, &self.root_extent);
         if l < self.root_extent.len() {
@@ -546,10 +698,10 @@ impl<K: KeySeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> StaticZFastTrie<K, H
             // that the exit node is one of its children
             let (i, found) = node.child(x[extent]);
             if found {
-                (node.start(i)..node.start(i + 1), node.key(&self.keys, i))
+                (node.start(i)..node.start(i + 1), node.key(&keys, i))
             } else {
                 // If we guessed right, x exits at top between two children
-                let key = node.key(&self.keys, 0);
+                let key = node.key(&keys, 0);
                 let key = key.as_ref();
                 let l = lcp(x, key);
                 return if l >= extent {
@@ -559,13 +711,13 @@ impl<K: KeySeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> StaticZFastTrie<K, H
                     // top is the exit node
                     Self::exit(x, key, l, node.left()..node.right())
                 } else {
-                    self.locate_slow(x)
+                    Self::locate_slow(&keys, x)
                 };
             }
         } else {
             // Either x is the extent of top, or top can only be the exit
             // node
-            (node.left()..node.right(), node.key(&self.keys, 0))
+            (node.left()..node.right(), node.key(&keys, 0))
         };
 
         // In all cases, the key is the first key of the range, and it starts
@@ -579,7 +731,7 @@ impl<K: KeySeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> StaticZFastTrie<K, H
             if l == key.len() && l < x.len() && range.len() > 1 {
                 // This cannot happen if top is the parent of the exit node
                 debug_assert!(self.sig_mask != u32::MAX);
-                return self.locate_slow(x);
+                return Self::locate_slow(&keys, x);
             }
             Self::exit(x, key, l, range)
         } else if l >= handle {
@@ -587,7 +739,7 @@ impl<K: KeySeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> StaticZFastTrie<K, H
             Self::exit(x, key, l, node.left()..node.right())
         } else {
             // A false positive misled the search
-            self.locate_slow(x)
+            Self::locate_slow(&keys, x)
         }
     }
 
@@ -609,13 +761,13 @@ impl<K: KeySeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> StaticZFastTrie<K, H
     /// A version of [`locate`](Self::locate) based on binary search.
     #[cold]
     #[inline(never)]
-    fn locate_slow(&self, x: &[u8]) -> Located {
-        let n = self.keys.num_keys();
+    fn locate_slow(keys: &impl KeySeq, x: &[u8]) -> Located {
+        let n = keys.num_keys();
         let lower = |x: &[u8], strict: bool| {
             let (mut lo, mut hi) = (0, n);
             while lo < hi {
                 let mid = lo + (hi - lo) / 2;
-                let key = self.keys.key(mid);
+                let key = keys.key(mid);
                 let key = key.as_ref();
                 // In the strict case we look for the first key that is larger
                 // than x and does not have x as a prefix
@@ -634,11 +786,7 @@ impl<K: KeySeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> StaticZFastTrie<K, H
         };
         let rank = lower(x, false);
         let end = lower(x, true);
-        (
-            rank,
-            rank < n && self.keys.key(rank).as_ref() == x,
-            rank..end,
-        )
+        (rank, rank < n && keys.key(rank).as_ref() == x, rank..end)
     }
 
     /// Returns the number of keys.
@@ -734,7 +882,9 @@ impl<K: KeySeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> StaticZFastTrie<K, H
     pub fn search_stats(&self, x: impl AsRef<[u8]>) -> (usize, usize, usize) {
         let x = x.as_ref();
         let (mut probes, mut scanned, mut hits) = (0, 0, 0);
-        if self.keys.num_keys() < 2 || lcp(x, &self.root_extent) < self.root_extent.len() {
+        if self.keys.num_keys().div_ceil(self.ratio) < 2
+            || lcp(x, &self.root_extent) < self.root_extent.len()
+        {
             return (0, 0, 0);
         }
         let mut a = self.root.extent as usize;

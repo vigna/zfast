@@ -11,7 +11,9 @@
 //! ```
 //!
 //! `STRUCTURE` is one of `zft`, `zft-chain`, `btree`, `szft`, `szft-chain`,
-//! `bsearch`, or `all`. `KEYS` is the name of a file containing one key per
+//! `bsearch`, or `all` (the static structures are built for each sampling
+//! ratio in the comma-separated list of the environment variable
+//! `ZFAST_RATIOS`, which defaults to `1,16`). `KEYS` is the name of a file containing one key per
 //! line, or `u64` (random 8-byte keys), `u64x2` (random 16-byte keys), or
 //! `urls` (synthetic URL-like keys). `N` is the number of keys to use (half of
 //! them are inserted, half are used for unsuccessful queries); `REPS` is the
@@ -130,7 +132,7 @@ fn sorted(keys: &PackedKeys) -> PackedKeys {
 }
 
 fn report(name: &str, op: &str, (ns, sum): (f64, usize), extra: &str) {
-    println!("{name:12} {op:14} {ns:9.1} ns  [{sum:20}] {extra}");
+    println!("{name:14} {op:14} {ns:9.1} ns  [{sum:20}] {extra}");
 }
 
 fn bench_dynamic<H: HashPrefixes>(
@@ -289,11 +291,13 @@ fn bench_static<H: HashPrefixes>(
     hits: &PackedKeys,
     misses: &PackedKeys,
     reps: usize,
+    ratio: usize,
 ) {
+    let name = &format!("{name}/{ratio}");
     let packed = sorted(ins);
     let key_bytes = packed.mem_size(SizeFlags::default());
     let start = Instant::now();
-    let trie = <StaticZFastTrie<_, H>>::new(packed).unwrap();
+    let trie = <StaticZFastTrie<_, H>>::with_ratio(packed, ratio).unwrap();
     let extra = format!(
         "{:.1} B/key index + {:.1} B/key keys, {:.3} nodes/key",
         (trie.mem_size(SizeFlags::default()) - key_bytes) as f64 / ins.len() as f64,
@@ -401,11 +405,19 @@ fn main() {
     if all || args[1] == "btree" {
         bench_btree(&ins, &hits, &misses, reps);
     }
-    if all || args[1] == "szft" {
-        bench_static::<Xxh3>("szft", &ins, &hits, &misses, reps);
-    }
-    if all || args[1] == "szft-chain" {
-        bench_static::<Chain>("szft-chain", &ins, &hits, &misses, reps);
+    // The sampling ratios of the static structures
+    let ratios: Vec<usize> = std::env::var("ZFAST_RATIOS")
+        .unwrap_or("1,16".into())
+        .split(',')
+        .map(|r| r.parse().expect("ZFAST_RATIOS must be a list of numbers"))
+        .collect();
+    for &ratio in &ratios {
+        if all || args[1] == "szft" {
+            bench_static::<Xxh3>("szft", &ins, &hits, &misses, reps, ratio);
+        }
+        if all || args[1] == "szft-chain" {
+            bench_static::<Chain>("szft-chain", &ins, &hits, &misses, reps, ratio);
+        }
     }
     if all || args[1] == "bsearch" {
         bench_bsearch(&ins, &hits, &misses, reps);
