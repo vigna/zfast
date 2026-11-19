@@ -171,6 +171,10 @@ impl Bucket {
         if n == 0 {
             return (0, false);
         }
+        // If x is a key, tags find it with a single comparison
+        if let Some(i) = self.find(x) {
+            return (i, true);
+        }
         if x.len() >= p && xxh3_64(&x[..p]) == self.prefix_hash {
             // Very likely x starts with the common prefix: we count the
             // heads smaller than, and not larger than, that of x.
@@ -664,6 +668,11 @@ impl<H: HashPrefixes> ZFastSet<H> {
             (bucket.prev, bucket.next)
         };
         let len = |b: u32| self.buckets[b as usize].len();
+        // We look at the adjacent buckets only when this one is small
+        // enough, as accessing them is expensive
+        if len(b) > MERGE / 2 {
+            return true;
+        }
         // Only the first bucket can be empty
         if prev != NONE && (len(b) == 0 || len(prev) + len(b) <= MERGE) {
             self.merge(prev, b);
