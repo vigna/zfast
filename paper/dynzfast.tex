@@ -2285,7 +2285,9 @@ can beat even B-trees, the gold standard of comparison-based data structures
 (but remember that the space occupied by the z-fast trie is presently much
 larger).
 
-The experiments use a C implementation derived from our reference Java implementation. 
+\subsection{The C implementation}
+
+The experiments of this section use a C implementation derived from our reference Java implementation. 
 It uses a standard linear-probing hash map. In the signed case,
 signatures are $63$ bits wide, with the upper bit reserved to mark duplicates. We use a
 hash function derived from Austin Appleby's MurmurHash2, which, while not being state of the art,
@@ -2347,7 +2349,114 @@ and $1.21$ times faster on deletions; with respect to a red-black tree, it is fr
 In this case comparisons
 are costly, and each comparison performed by a comparison-based structure accesses a different string, whereas the z-fast trie 
 accesses hash-table entries and nodes of bounded size, and compares the query with strings in the set only at the end of the search. 
-\todo[inline]{Placeholder: a section on the Rust implementation and its benchmarks goes here.}
+
+\subsection{A byte-oriented implementation in Rust}
+\label{sec:rust}
+
+\todo[inline]{This section is preliminary: it reports the first measurements of a new implementation, on a single data set and 
+against two competitors only. Tables~\ref{tab:rustdynb}--\ref{tab:ruststatm} are generated from the results in \texttt{results-epyc} 
+by the benchmark framework distributed with the code.}
+
+We also provide a new implementation in Rust\todo{LINK}, based on the \texttt{sux} crate, whose design 
+was guided by measurements on current hardware, where the cost of an operation on a large data structure is essentially 
+the number of cache misses that cannot be served in parallel. It differs from the structure described in the previous sections, 
+and from the C implementation, in a few respects.
+\begin{itemize}
+\item Keys are arbitrary strings of bytes, the trie branches on bytes rather than on bits, and all lengths are expressed in bytes; 
+a key that is a prefix of another key is handled by assuming that each key is followed by a terminator smaller than all bytes. 
+Internal nodes contain a small sorted array of children. It is easy to see that the handles of this trie are exactly the handles
+of the binary trie whose length is a multiple of eight, so the results of the previous sections carry over; on our data,
+the byte-level trie has about $0.54$ internal nodes per key.
+\item The entries of the z-map are self-contained: an entry occupies $16$ bytes and contains a $64$-bit signature, the length of the 
+extent, and the index of the node, so that fat binary search never accesses a node. Entries with the same signature are marked, as described in
+Section~\ref{sec:dict}, and the result of a search is verified with a single comparison between strings; if the verification fails,
+the search is repeated by walking down the trie.
+\item The signature of a prefix is computed by hashing the prefix from scratch with xxh3: on our data this is a few percent faster 
+than preprocessing the key and storing the state of a hash function every eight bytes, in spite of the discussion above.
+\end{itemize}
+
+There are three data structures. The first one, \texttt{ZFastTrie}, is the dynamic z-fast trie described in this paper, with jump pointers 
+maintained using the stack of $2$-fat ancestors and a doubly linked list of leaves. The second one, \texttt{StaticZFastTrie}, is a static z-fast trie on a sorted
+sequence of strings in which a node is represented by the interval of ranks of the keys in its subtree, so that there are no pointers, 
+and queries return ranks; the trie can index just one key every $k$ (the \emph{sampling ratio}), in which case a query is completed by 
+a binary search among $k$ consecutive keys. Its components can be replaced by succinct ones, such as the Elias--Fano representation of 
+monotone sequences. The third one, \texttt{ZFastSet}, has the organization of a y-fast trie, and thus of 
+Wormhole~\cite{WNJWormhole}: the keys are stored in buckets of at most $64$ keys, and a \texttt{ZFastTrie} indexes the shortest strings separating consecutive buckets. 
+Each bucket contains, for each key, a $16$-bit hash, used for membership queries, and the eight bytes following the prefix common to the keys of the bucket,
+used for ordered searches, so that in most cases a single key has to be compared with the query. 
+
+We compare these structures with Wormhole (using its single-threaded interface), with the B-tree of the Rust standard library (\texttt{BTreeSet}, whose 
+nodes contain up to $11$ pointers to keys), and, in the static case, with a binary search on the sorted keys, 
+which are stored contiguously. We use $10$ million URLs from the \texttt{eu-2015} crawl in random order (their average length is $78$ bytes): 
+half of them are added to the structure, and the other half are used as queries for strings not in the set (``Contains$^-$'', ``Successor$^-$''); 
+we also report results for one million URLs. 
+All structures execute the same sequence of operations, reading keys and queries from contiguous buffers; ``Successor'' is the smallest key larger than or equal to the query, 
+and ``Scan'' is the time per key of an iteration over all keys. Timings are wall-clock times in nanoseconds per operation, measured on 
+a single core of an AMD EPYC~9R45 with Linux~6.18; for queries we report the best of three passes over the queries. 
+The Rust code was compiled with \texttt{rustc}~1.100 and Wormhole with \texttt{gcc}~11.5, in both cases with full optimization for the host processor. 
+For dynamic structures we report the growth of the resident set size of the process per key, which includes the keys; 
+for static structures, the size of the index per key, excluding the keys.
+
+The results for dynamic structures are shown in Tables~\ref{tab:rustdynb} and~\ref{tab:rustdynm}. 
+With one key per leaf, on five million URLs the z-fast trie performs like the B-tree: queries take from $14$\% less 
+time to $13$\% more, insertions are slightly slower, deletions are $1.36$ times slower, and scans are much slower, as consecutive leaves are unrelated in memory. 
+The reason is that when the trie does not fit the cache each probe of a fat binary search is a cache miss, and the trie performs
+between five and six probes per query on these data (we measured $5.5$ probes on average on the smaller set), followed by the accesses to a node, a leaf and a key; 
+the timings suggest that the B-tree performs a comparable number of cache misses. The advantage shown by Table~\ref{tab:urlsb} for a billion keys 
+appears only on much larger sets, where the number of cache misses of a comparison-based structure grows while that of the z-fast trie does not.
+
+The bucketed structure is significantly better: with respect to the B-tree, on five million URLs membership queries are $1.4$ times faster for keys in the 
+set and $2.8$ times faster for strings not in the set, successor queries are $1.4$ times faster for keys in the set, scans are faster, and the remaining operations (insertions, deletions, 
+and successor queries for strings not in the set) take from $4$\% to $9$\% more time; the memory footprint is $7$\% larger. 
+Wormhole, however, is still about two times faster on most operations (from $1.8$ to $2.2$ times on five million keys), the exception being
+successor queries for strings not in the set, where the two structures are within $5$\% on five million keys and Wormhole is $1.12$ times faster on $500\,000$ (on that size its advantage 
+on the other operations ranges from $1.4$ to $2.3$ times); 
+the space used is essentially the same. Since the two structures are organized in the same way, 
+the difference is to be ascribed to the cost of searching the index, which in both cases is small enough to be accessed without cache misses, and 
+to the organization of the buckets, and not to the number of entries of the hash table: we expect that this gap can be closed.
+
+Tables~\ref{tab:ruststatb} and~\ref{tab:ruststatm} show the results for the static case. On five million URLs, a static z-fast trie indexing all keys 
+answers membership queries $1.3$ times faster than a binary search, and successor queries $1.10$ to $1.13$ times faster, using $34$ bytes per key. 
+Indexing one key every $16$ makes \emph{all} queries about $1.4$ times faster than a binary search, as the index now 
+fits the cache, with just $2$ bytes of index per key, which become $1$ if the directories of the nodes are 
+represented by Elias--Fano sequences, with no measurable slowdown. On $500\,000$ URLs the sampled index and the binary search take essentially the same time. 
+
+\begin{table}
+\renewcommand{\arraystretch}{1.2}
+\setlength{\tabcolsep}{8pt}
+\centering
+\input{fig/bench-dynamic-10000000}
+\caption{\label{tab:rustdynb}Timings in nanoseconds for basic operations on a set of five million URLs from the \texttt{eu-2015} crawl 
+(Rust implementation and competitors). The last row is the memory used per key in bytes, including the keys, 
+which have an average length of $78$ bytes.}
+\end{table}
+
+\begin{table}
+\renewcommand{\arraystretch}{1.2}
+\setlength{\tabcolsep}{8pt}
+\centering
+\input{fig/bench-dynamic-1000000}
+\caption{\label{tab:rustdynm}Timings in nanoseconds for basic operations on a set of $500\,000$ URLs from the \texttt{eu-2015} crawl 
+(Rust implementation and competitors). The last row is the memory used per key in bytes, including the keys.}
+\end{table}
+
+\begin{table}
+\renewcommand{\arraystretch}{1.2}
+\setlength{\tabcolsep}{8pt}
+\centering
+\input{fig/bench-static-10000000}
+\caption{\label{tab:ruststatb}Timings in nanoseconds for queries on a static set of five million URLs from the \texttt{eu-2015} crawl: 
+static z-fast tries with sampling ratio $1$ and $16$ (also with directories based on the Elias--Fano representation) and binary search. 
+Construction time is per key; the last row is the size of the index per key in bytes, excluding the keys.}
+\end{table}
+
+\begin{table}
+\renewcommand{\arraystretch}{1.2}
+\setlength{\tabcolsep}{8pt}
+\centering
+\input{fig/bench-static-1000000}
+\caption{\label{tab:ruststatm}Timings in nanoseconds for queries on a static set of $500\,000$ URLs from the \texttt{eu-2015} crawl; see Table~\ref{tab:ruststatb}.}
+\end{table}
 
 
 \begin{table}

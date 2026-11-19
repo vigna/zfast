@@ -7,6 +7,7 @@ Each entry of METHODS specifies:
     "wormhole" (the C driver wh_bench);
   - arg: for "rust", the name of the method passed to the driver;
   - label: the name used in reports;
+  - tex: the name used in the tables of the paper (default: the label);
   - kind: "dynamic" or "static" (static structures have no update phases).
 
 Each entry of DATASETS specifies the source of the keys: either a synthetic
@@ -22,11 +23,11 @@ SPACE lines (see zfast-bench/src/main.rs).
 METHODS = {
     "ZFastSet": {
         "tool": "rust", "arg": "zset", "kind": "dynamic",
-        "label": "z-fast set (bucketed)",
+        "label": "z-fast set (bucketed)", "tex": "\\texttt{ZFastSet}",
     },
     "ZFastTrie": {
         "tool": "rust", "arg": "zft", "kind": "dynamic",
-        "label": "z-fast trie",
+        "label": "z-fast trie", "tex": "\\texttt{ZFastTrie}",
     },
     "ZFastTrieChain": {
         "tool": "rust", "arg": "zft-chain", "kind": "dynamic",
@@ -34,27 +35,27 @@ METHODS = {
     },
     "Wormhole": {
         "tool": "wormhole", "kind": "dynamic",
-        "label": "Wormhole",
+        "label": "Wormhole", "tex": "Wormhole",
     },
     "BTreeSet": {
         "tool": "rust", "arg": "btree", "kind": "dynamic",
-        "label": "BTreeSet (Rust)",
+        "label": "BTreeSet (Rust)", "tex": "\\texttt{BTreeSet}",
     },
     "StaticZFastTrie": {
         "tool": "rust", "arg": "szft:1", "kind": "static",
-        "label": "static z-fast trie",
+        "label": "static z-fast trie", "tex": "ratio 1",
     },
     "StaticZFastTrie16": {
         "tool": "rust", "arg": "szft:16", "kind": "static",
-        "label": "static z-fast trie (ratio 16)",
+        "label": "static z-fast trie (ratio 16)", "tex": "ratio 16",
     },
     "StaticZFastTrie16Ef": {
         "tool": "rust", "arg": "szft-ef:16", "kind": "static",
-        "label": "static z-fast trie (ratio 16, Elias-Fano)",
+        "label": "static z-fast trie (ratio 16, Elias-Fano)", "tex": "ratio 16, EF",
     },
     "BinarySearch": {
         "tool": "rust", "arg": "bsearch", "kind": "static",
-        "label": "binary search",
+        "label": "binary search", "tex": "binary search",
     },
 }
 

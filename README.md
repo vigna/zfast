@@ -40,6 +40,15 @@ same order, and each driver prints checksums that `report` compares. Results
 are stored per data point in `bench/results`, so a campaign can be interrupted
 and resumed.
 
+The tables of the paper are generated from the results stored in
+`paper/results-epyc` (obtained on an AMD EPYC 9R45):
+
+```text
+python3 bench/run.py table --results paper/results-epyc --dataset eu-urls \
+    --n 10000000 --kind dynamic --method ZFastSet,ZFastTrie,Wormhole,BTreeSet \
+    --out paper/fig/bench-dynamic-10000000.tex
+```
+
 `bench/zfast-bench` is the Rust driver for the structures of the crate and for
 the baselines from the standard library; `bench/wh_bench.c` is the driver for
 Wormhole. To add a structure, write a driver that reads the same workload
