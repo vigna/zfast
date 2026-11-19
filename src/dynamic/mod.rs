@@ -10,7 +10,7 @@ mod check;
 mod key;
 mod map;
 
-use crate::utils::{HashPrefixes, PrefixHasher, Xxh3, jump, lcp, two_fattest};
+use crate::utils::{HashPrefixes, PrefixHasher, Xxh3, fat_binary_search, jump, lcp, two_fattest};
 use key::Key;
 use map::HandleMap;
 use std::fmt;
@@ -587,26 +587,26 @@ impl<H: HashPrefixes> ZFastTrie<H> {
         // The fat binary search proper: top is the last node that was hit,
         // and f the length of the prefix used to find it.
         let (mut top, mut f_top) = (self.root, 0);
-        let (mut a, mut b) = (extent, x.len().min(self.max_extent));
-        if a < b {
+        let b = x.len().min(self.max_extent);
+        if extent < b {
             let hasher = H::hasher(x, b, self.seed);
-            while a < b {
-                let f = two_fattest(a, b);
-                let found = self.map.find(hasher.hash(f) & self.sig_mask, f, |id| {
-                    self.handle_is(id, x, f)
-                });
-                match found {
-                    Some((extent, id)) => {
-                        a = extent;
-                        top = id;
-                        f_top = f;
-                        if let Some(stack) = stack.as_deref_mut() {
-                            stack.push(id);
-                        }
+            fat_binary_search(
+                &hasher,
+                extent,
+                b,
+                |h| self.map.prefetch(h & self.sig_mask),
+                |f, h| {
+                    let (extent, id) = self
+                        .map
+                        .find(h & self.sig_mask, f, |id| self.handle_is(id, x, f))?;
+                    top = id;
+                    f_top = f;
+                    if let Some(stack) = stack.as_deref_mut() {
+                        stack.push(id);
                     }
-                    None => b = f - 1,
-                }
-            }
+                    Some(extent)
+                },
+            );
         }
 
         match self.verify(x, top, f_top, stack.as_deref_mut()) {
@@ -1080,17 +1080,22 @@ impl<H: HashPrefixes> ZFastTrie<H> {
 
     // Jump pointers
 
+    /// Sets the jump pointer on the given side of an internal node by
+    /// following the jump pointers of its first or last child.
+    fn set_jump_from_child(&mut self, id: u32, side: Side) {
+        let jump_len = self.internal(id).jump_len();
+        let mut target = self.extreme_child(id, side);
+        while !self.intercepts(target, jump_len) {
+            target = self.jump(target, side);
+        }
+        self.set_jump(id, side, target);
+    }
+
     /// Sets the jump pointers of an internal node by following the jump
     /// pointers of its first and last child.
     fn set_jumps(&mut self, id: u32) {
-        let jump_len = self.internal(id).jump_len();
-        for side in [Side::Left, Side::Right] {
-            let mut target = self.extreme_child(id, side);
-            while !self.intercepts(target, jump_len) {
-                target = self.jump(target, side);
-            }
-            self.set_jump(id, side, target);
-        }
+        self.set_jump_from_child(id, Side::Left);
+        self.set_jump_from_child(id, Side::Right);
     }
 
     /// Fixes the jump pointers on the given side of the nodes in the stack
@@ -1429,7 +1434,19 @@ impl<H: HashPrefixes> ZFastTrie<H> {
                         .replace(self.sig(x, handle_len), parex, other, other_extent_len);
                 }
                 self.internal_mut(other).name_len = name_len as u32;
-                self.set_jumps(other);
+                // The other node inherits the handle of the parent, and thus
+                // its jump length. On its own side the jump pointer of the
+                // parent is the right one (and copying it is necessary to
+                // bound the time of a deletion); on the side of the removed
+                // leaf the pointer has to be recomputed.
+                let (leaf_side, other_side) = if was_first {
+                    (Side::Left, Side::Right)
+                } else {
+                    (Side::Right, Side::Left)
+                };
+                let target = self.jump(parex, other_side);
+                self.set_jump(other, other_side, target);
+                self.set_jump_from_child(other, leaf_side);
             } else {
                 self.map.remove(self.sig(x, handle_len), parex);
                 self.internal_mut(other).name_len = name_len as u32;

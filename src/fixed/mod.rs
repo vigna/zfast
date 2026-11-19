@@ -7,7 +7,7 @@
 //! A static z-fast trie on a sorted sequence of byte strings.
 
 use crate::keys::KeySeq;
-use crate::utils::{HashPrefixes, PrefixHasher, Xxh3, lcp, two_fattest};
+use crate::utils::{HashPrefixes, Xxh3, fat_binary_search, lcp, prefetch, two_fattest};
 use mem_dbg::{MemDbg, MemSize};
 use std::borrow::Borrow;
 use std::fmt;
@@ -453,20 +453,29 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
     #[inline(always)]
     fn fat_binary_search(&self, x: &[u8]) -> Slot {
         let mut top = self.root;
-        let mut a = top.extent as usize;
-        let mut b = x.len().min(self.max_extent);
+        let a = top.extent as usize;
+        let b = x.len().min(self.max_extent);
         if a < b {
             let hasher = H::hasher(x, b, self.seed);
-            while a < b {
-                let f = two_fattest(a, b);
-                match self.find(hasher.hash(f), f) {
-                    Some(slot) => {
-                        a = slot.extent as usize;
+            let capacity = self.slots.len();
+            fat_binary_search(
+                &hasher,
+                a,
+                b,
+                |h| {
+                    prefetch(self.slots.as_ptr().wrapping_add(Self::home(
+                        h,
+                        self.sig_mask,
+                        capacity,
+                    )))
+                },
+                |f, h| {
+                    self.find(h, f).map(|slot| {
                         top = slot;
-                    }
-                    None => b = f - 1,
-                }
-            }
+                        slot.extent as usize
+                    })
+                },
+            );
         }
         top
     }
@@ -688,6 +697,52 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
     /// Returns the number of internal nodes of the trie.
     pub fn num_nodes(&self) -> usize {
         self.num_nodes
+    }
+
+    /// Returns the number of probes of the z-map, the number of slots
+    /// examined, and the number of successful probes of a fat binary search
+    /// for `x`.
+    ///
+    /// This method is useful only to analyze the behavior of the structure.
+    #[doc(hidden)]
+    pub fn search_stats(&self, x: impl AsRef<[u8]>) -> (usize, usize, usize) {
+        let x = x.as_ref();
+        let (mut probes, mut scanned, mut hits) = (0, 0, 0);
+        if self.keys.num_keys() < 2 || lcp(x, &self.root_extent) < self.root_extent.len() {
+            return (0, 0, 0);
+        }
+        let mut a = self.root.extent as usize;
+        let mut b = x.len().min(self.max_extent);
+        let capacity = self.slots.len();
+        while a < b {
+            let f = two_fattest(a, b);
+            let h = H::hash_prefix(x, f, self.seed);
+            let sig = h as u32 & self.sig_mask;
+            let mut pos = Self::home(h, self.sig_mask, capacity);
+            probes += 1;
+            let found = loop {
+                let slot = self.slots[pos];
+                scanned += 1;
+                if slot.off == EMPTY {
+                    break None;
+                }
+                if slot.sig == sig && slot.handle as usize == f {
+                    break Some(slot);
+                }
+                pos += 1;
+                if pos == capacity {
+                    pos = 0;
+                }
+            };
+            match found {
+                Some(slot) => {
+                    hits += 1;
+                    a = slot.extent as usize;
+                }
+                None => b = f - 1,
+            }
+        }
+        (probes, scanned, hits)
     }
 
     /// Returns the number of bytes occupied by this structure, not including

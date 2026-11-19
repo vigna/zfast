@@ -95,6 +95,13 @@ impl HandleMap {
         self.slots.len() - 1
     }
 
+    /// Prefetches the first slot that will be examined when looking for the
+    /// given signature.
+    #[inline(always)]
+    pub fn prefetch(&self, sig: u64) {
+        crate::utils::prefetch(self.slots.as_ptr().wrapping_add(self.home(sig)));
+    }
+
     /// Returns the length of the extent and the index of a node whose handle
     /// has the given signature and whose extent is not shorter than `f`.
     ///
@@ -207,11 +214,6 @@ impl HandleMap {
         }
         self.slots[hole] = EMPTY_SLOT;
         self.len -= 1;
-    }
-
-    /// Removes all slots.
-    pub fn clear(&mut self) {
-        *self = Self::new();
     }
 
     fn resize(&mut self, capacity: usize) {
