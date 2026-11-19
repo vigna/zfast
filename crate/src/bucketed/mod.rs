@@ -123,7 +123,13 @@ impl Bucket {
         for i in 0..CAP {
             mask |= ((self.tags[i] == t) as u64) << i;
         }
-        mask & (u64::MAX >> (CAP - self.len()) % 64) & if self.len == 0 { 0 } else { u64::MAX }
+        // Only the first len positions are meaningful
+        let valid = if self.len == 0 {
+            0
+        } else {
+            u64::MAX >> (CAP - self.len())
+        };
+        mask & valid
     }
 
     /// Returns the position of `x`, if it is a key of this bucket.

@@ -122,18 +122,34 @@ impl Runner<'_> {
     }
 }
 
-fn run_trie<H: HashPrefixes>(r: &Runner, keys: &PackedKeys, hits: &PackedKeys, misses: &PackedKeys) {
+fn run_trie<H: HashPrefixes>(
+    r: &Runner,
+    keys: &PackedKeys,
+    hits: &PackedKeys,
+    misses: &PackedKeys,
+) {
     let before = rss();
     let mut trie = <ZFastTrie<H>>::new();
     r.time("insert", 1, keys, |k| trie.insert(k) as usize);
     r.space(keys.len(), trie.mem_size(), rss().saturating_sub(before));
     r.time("contains-hit", r.reps, hits, |k| trie.contains(k) as usize);
-    r.time("contains-miss", r.reps, misses, |k| trie.contains(k) as usize);
-    r.time("succ-hit", r.reps, hits, |k| trie.succ(k).map_or(0, <[u8]>::len));
-    r.time("succ-miss", r.reps, misses, |k| trie.succ(k).map_or(0, <[u8]>::len));
+    r.time("contains-miss", r.reps, misses, |k| {
+        trie.contains(k) as usize
+    });
+    r.time("succ-hit", r.reps, hits, |k| {
+        trie.succ(k).map_or(0, <[u8]>::len)
+    });
+    r.time("succ-miss", r.reps, misses, |k| {
+        trie.succ(k).map_or(0, <[u8]>::len)
+    });
     let start = Instant::now();
     let sum = trie.iter().map(<[u8]>::len).sum::<usize>();
-    r.result("iterate", keys.len(), start.elapsed().as_nanos() as f64 / keys.len() as f64, sum);
+    r.result(
+        "iterate",
+        keys.len(),
+        start.elapsed().as_nanos() as f64 / keys.len() as f64,
+        sum,
+    );
     r.time("remove", 1, hits, |k| trie.remove(k) as usize);
 }
 
@@ -143,12 +159,23 @@ fn run_set<H: HashPrefixes>(r: &Runner, keys: &PackedKeys, hits: &PackedKeys, mi
     r.time("insert", 1, keys, |k| set.insert(k) as usize);
     r.space(keys.len(), set.mem_size(), rss().saturating_sub(before));
     r.time("contains-hit", r.reps, hits, |k| set.contains(k) as usize);
-    r.time("contains-miss", r.reps, misses, |k| set.contains(k) as usize);
-    r.time("succ-hit", r.reps, hits, |k| set.succ(k).map_or(0, <[u8]>::len));
-    r.time("succ-miss", r.reps, misses, |k| set.succ(k).map_or(0, <[u8]>::len));
+    r.time("contains-miss", r.reps, misses, |k| {
+        set.contains(k) as usize
+    });
+    r.time("succ-hit", r.reps, hits, |k| {
+        set.succ(k).map_or(0, <[u8]>::len)
+    });
+    r.time("succ-miss", r.reps, misses, |k| {
+        set.succ(k).map_or(0, <[u8]>::len)
+    });
     let start = Instant::now();
     let sum = set.iter().map(<[u8]>::len).sum::<usize>();
-    r.result("iterate", keys.len(), start.elapsed().as_nanos() as f64 / keys.len() as f64, sum);
+    r.result(
+        "iterate",
+        keys.len(),
+        start.elapsed().as_nanos() as f64 / keys.len() as f64,
+        sum,
+    );
     r.time("remove", 1, hits, |k| set.remove(k) as usize);
 }
 
@@ -158,15 +185,24 @@ fn run_btree(r: &Runner, keys: &PackedKeys, hits: &PackedKeys, misses: &PackedKe
     r.time("insert", 1, keys, |k| set.insert(k.into()) as usize);
     r.space(keys.len(), 0, rss().saturating_sub(before));
     let succ = |set: &BTreeSet<Box<[u8]>>, k: &[u8]| {
-        set.range::<[u8], _>((Included(k), Unbounded)).next().map_or(0, |s| s.len())
+        set.range::<[u8], _>((Included(k), Unbounded))
+            .next()
+            .map_or(0, |s| s.len())
     };
     r.time("contains-hit", r.reps, hits, |k| set.contains(k) as usize);
-    r.time("contains-miss", r.reps, misses, |k| set.contains(k) as usize);
+    r.time("contains-miss", r.reps, misses, |k| {
+        set.contains(k) as usize
+    });
     r.time("succ-hit", r.reps, hits, |k| succ(&set, k));
     r.time("succ-miss", r.reps, misses, |k| succ(&set, k));
     let start = Instant::now();
     let sum = set.iter().map(|k| k.len()).sum::<usize>();
-    r.result("iterate", keys.len(), start.elapsed().as_nanos() as f64 / keys.len() as f64, sum);
+    r.result(
+        "iterate",
+        keys.len(),
+        start.elapsed().as_nanos() as f64 / keys.len() as f64,
+        sum,
+    );
     r.time("remove", 1, hits, |k| set.remove(k) as usize);
 }
 
@@ -192,12 +228,27 @@ fn run_static<H: HashPrefixes>(
     macro_rules! phases {
         ($trie:expr) => {
             let trie = $trie;
-            r.result("build", keys.len(), start.elapsed().as_nanos() as f64 / keys.len() as f64, trie.len());
-            r.space(keys.len(), trie.mem_size(SizeFlags::default()) - key_bytes, 0);
+            r.result(
+                "build",
+                keys.len(),
+                start.elapsed().as_nanos() as f64 / keys.len() as f64,
+                trie.len(),
+            );
+            r.space(
+                keys.len(),
+                trie.mem_size(SizeFlags::default()) - key_bytes,
+                0,
+            );
             r.time("contains-hit", r.reps, hits, |k| trie.contains(k) as usize);
-            r.time("contains-miss", r.reps, misses, |k| trie.contains(k) as usize);
-            r.time("succ-hit", r.reps, hits, |k| trie.succ(k).map_or(0, |s| s.1.len()));
-            r.time("succ-miss", r.reps, misses, |k| trie.succ(k).map_or(0, |s| s.1.len()));
+            r.time("contains-miss", r.reps, misses, |k| {
+                trie.contains(k) as usize
+            });
+            r.time("succ-hit", r.reps, hits, |k| {
+                trie.succ(k).map_or(0, |s| s.1.len())
+            });
+            r.time("succ-miss", r.reps, misses, |k| {
+                trie.succ(k).map_or(0, |s| s.1.len())
+            });
         };
     }
     if ef {
@@ -240,7 +291,9 @@ fn run_bsearch(r: &Runner, keys: &PackedKeys, hits: &PackedKeys, misses: &Packed
 fn usage() -> ! {
     eprintln!("Usage: zfast-bench gen KEYS N PREFIX");
     eprintln!("       zfast-bench run METHOD PREFIX REPS");
-    eprintln!("Methods: zset, zft, zft-chain, btree, bsearch, szft:RATIO, szft-ef:RATIO, szft-chain:RATIO");
+    eprintln!(
+        "Methods: zset, zft, zft-chain, btree, bsearch, szft:RATIO, szft-ef:RATIO, szft-chain:RATIO"
+    );
     std::process::exit(1)
 }
 
@@ -253,7 +306,11 @@ fn main() {
             for (keys, ext) in [(&w.keys, "keys"), (&w.hits, "hits"), (&w.misses, "misses")] {
                 write(keys, &format!("{}.{ext}", args[4])).expect("cannot write workload");
             }
-            eprintln!("{} keys, {} unsuccessful queries", w.keys.len(), w.misses.len());
+            eprintln!(
+                "{} keys, {} unsuccessful queries",
+                w.keys.len(),
+                w.misses.len()
+            );
         }
         Some("run") if args.len() == 5 => {
             let reps: usize = args[4].parse().unwrap_or_else(|_| usage());
