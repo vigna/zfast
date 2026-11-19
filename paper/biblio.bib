@@ -1,0 +1,228 @@
+@string{JCSS = "J. Comput. System Sci."}
+
+@string{IPL = "Inform. Process. Lett."}
+
+@string{JACM = "J. Assoc. Comput. Mach."}
+
+@string{lncs = "Lecture Notes in Computer Science"}
+
+@string{springer = "Springer-Verlag"}
+
+@string{esa01 = "Proceedings of the 9th European Symposium on Algorithms (ESA~'01)"}
+
+@article{AnTDOSEST,
+  author  = {Arne Andersson and Mikkel Thorup},
+  title   = {Dynamic ordered sets with exponential search trees},
+  journal = {Journal of the ACM},
+  volume  = {54},
+  number  = {3},
+  pages   = {13:1--13:40},
+  year    = {2007}
+}
+
+@inproceedings{BBPMMPH,
+  author    = {Djamal Belazzougui and Paolo Boldi and Rasmus Pagh and Sebastiano Vigna},
+  title     = {Monotone Minimal Perfect Hashing: {S}earching a Sorted Table with {$O(1)$} Accesses},
+  booktitle = {Proceedings of the 20th Annual {ACM}-{SIAM} Symposium
+               On Discrete Mathematics ({SODA})},
+  publisher = {ACM Press},
+  address   = {New York},
+  pages     = {785--794},
+  year      = {2009},
+  notextra  = {               
+               <p>A minimal perfect hash function maps a set <var>S</var> of <var>n</var> keys into the
+               set {0,1,&hellip;, <var>n</var> &minus; 1} bijectively. Classical results state
+               that minimal perfect hashing is possible in constant time using
+               a structure occupying space close to the lower bound of 
+               log <i>e</i> bits per element. Here we consider the problem of <em>monotone</em>
+               minimal perfect hashing, in which the bijection is required to preserve
+               the lexicographical ordering of the keys. A monotone minimal perfect
+               hash function can be seen as a very weak form of <em>index</em> that provides
+               <em>ranking</em> just on the set <var>S</var> (and answers randomly outside of <var>S</var>).
+               Our goal is to minimise the description size of the hash function: we show
+               that, for a set <var>S</var> of <var>n</var> elements out of a universe of 2<sup><var>w</var></sup> elements, 
+               <i>O</i>(<var>n</var> log log <var>w</var>) bits are sufficient to hash monotonically with evaluation time <i>O</i>(log <var>w</var>).
+               Alternatively, we can get space <i>O</i>(<var>n</var> log <var>w</var>) bits with <i>O</i>(1) query
+               time. Both of these data structures improve a straightforward construction with
+               <i>O</i>(<var>n</var> log <var>w</var>) space and <i>O</i>(log <var>w</var>) query time. As a consequence, it is possible
+               to search a sorted table with <i>O</i>(1) accesses to the table (using
+               additional <i>O</i>(<var>n</var> log log <var>w</var>) bits). Our results are based
+               on a structure (of independent interest) that represents a trie in a very
+               compact way, but admits errors. As
+               a further application of the same structure, we show how to compute
+               the predecessor (in the sorted order of <var>S</var>) of an arbitrary element, using <i>O</i>(1)
+               accesses in expectation and an index of <i>O</i>(<var>n</var> log <var>w</var>) bits, improving
+               the trivial result of <i>O</i>(<var>nw</var>) bits. This implies an efficient index
+               for searching a blocked memory.
+               </p>
+               <p><b><a href="https://vigna.di.unimi.it/ftp/papers/MonotoneMinimalPerfectHashing.pdf">PDF version</a>. The
+               algorithms described in the paper are implemented in <a href="https://sux4j.di.unimi.it/">Sux4J</a>.</b>
+               },
+  category  = CONVEGNO
+}
+
+@article{DKMDPHULB,
+  author  = {Martin Dietzfelbinger and
+             Anna R. Karlin and
+             Kurt Mehlhorn and
+             Friedhelm Meyer auf der Heide and
+             Hans Rohnert and
+             Robert Endre Tarjan},
+  title   = {Dynamic Perfect Hashing: Upper and Lower Bounds},
+  journal = {SIAM J. Comput.},
+  volume  = {23},
+  number  = {4},
+  year    = {1994},
+  pages   = {738--761}
+}
+
+@article{EKZDIEPQ,
+  title     = {Design and implementation of an efficient priority queue},
+  author    = {van Emde Boas, P. and Kaas, R. and Zijlstra, E.},
+  journal   = {Theory Comput. Systems},
+  volume    = {10},
+  number    = {1},
+  pages     = {99--127},
+  year      = {1976},
+  publisher = {Springer}
+}
+
+@article{FLPCOA,
+  author    = {Frigo, Matteo and Leiserson, Charles E. and Prokop, Harald and Ramachandran, Sridhar},
+  title     = {Cache-Oblivious Algorithms},
+  journal   = {ACM Trans. Algorithms},
+  volume    = {8},
+  number    = {1},
+  month     = jan,
+  year      = {2012},
+  pages     = {4:1--4:22},
+  articleno = {4},
+  numpages  = {22},
+  publisher = {ACM},
+  address   = {New York, NY, USA}
+}
+
+@article{FeGSBT,
+  author  = {Paolo Ferragina and
+             Roberto Grossi},
+  title   = {The String {B}-tree: A New Data Structure for String Search
+             in External Memory and Its Applications},
+  journal = JACM,
+  volume  = {46},
+  number  = {2},
+  year    = {1999},
+  pages   = {236--280}
+}
+
+@book{KnuACP,
+  author    = {Donald E. Knuth},
+  title     = {The Art of Computer Programming},
+  publisher = {Addison--Wesley},
+  year      = {1973}
+}
+
+@book{KnuACPIV,
+  author    = {Donald E. Knuth},
+  title     = {The Art of Computer Programming: 
+               {Combinatorial} algorithms. {Part 1}},
+  volume    = {4A},
+  publisher = {Ad{\-d}i{\-s}on-Wes{\-l}ey},
+  year      = {2011}
+}
+
+@article{MeNBOD,
+  author  = {Kurt Mehlhorn and
+             Stefan N{\"a}her},
+  title   = {Bounded Ordered Dictionaries in {$O(\log \log N)$} Time and {$O(n)$}
+             Space},
+  journal = {Inf. Process. Lett.},
+  volume  = {35},
+  number  = {4},
+  year    = {1990},
+  pages   = {183--189}
+}
+
+@inproceedings{PaRCH,
+  title     = {Cuckoo Hashing},
+  author    = {Rasmus Pagh and Flemming Friche Rodler},
+  booktitle = esa01,
+  publisher = springer,
+  series    = lncs,
+  volume    = {2161},
+  pages     = {121--133},
+  year      = {2001}
+}
+
+@inproceedings{PaTRDNHSP,
+  author    = {P\v{a}tra\c{s}cu, Mihai and Thorup, Mikkel},
+  title     = {Randomization does not help searching predecessors},
+  booktitle = {SODA '07: Proceedings of the eighteenth annual ACM-SIAM symposium on Discrete algorithms},
+  year      = {2007},
+  pages     = {555--564},
+  location  = {New Orleans, Louisiana},
+  publisher = {Society for Industrial and Applied Mathematics},
+  address   = {Philadelphia, PA, USA}
+}
+
+@article{WilLLWRQ,
+  title     = {Log-logarithmic worst-case range queries are possible in space {$\Theta(N)$}},
+  author    = {Willard, Dan E.},
+  journal   = IPL,
+  volume    = {17},
+  number    = {2},
+  pages     = {81--84},
+  year      = {1983},
+  publisher = {Elsevier}
+}
+
+@inproceedings{BBVDZT,
+  title     = {Dynamic Z-Fast Tries},
+  author    = {Djamal Belazzougui and Paolo Boldi and Sebastiano
+               Vigna},
+  booktitle = {String Processing and Information Retrieval - 17th
+               International Symposium, {SPIRE} 2010, Los Cabos,
+               Mexico, October 11-13, 2010. Proceedings},
+  publisher = {Springer},
+  year      = {2010},
+  volume    = {6393},
+  editor    = {Edgar Ch{\'a}vez and Stefano Lonardi},
+  pages     = {159--172},
+  series    = {Lecture Notes in Computer Science},
+  notextra  = {               
+               <p>We describe a dynamic version of the <em>z-fast trie</em>, a
+               new data structure inspired by the research started by the van Emde Boas
+               trees and followed by the development of y-fast tries. The dynamic z-fast trie is a very
+               simple, uniform data structure: given a set <var>S</var> of <var>n</var> variable-length strings, it is
+               formed by a standard compacted trie on <var>S</var>
+               (with two additional pointers per node), endowed with a dictionary of
+               size <var>n</var>&minus;1. With this simple setup, the dynamic z-fast trie provides
+               predecessors/successors in time
+               <i>O</i>(log max{&nbsp;|<var>x</var>|, |<var>x</var><sup>+</sup>|, |<var>x</var><sup>-</sup>|&nbsp;}) (<var>x</var><sup>&plusmn;</sup> is the
+               successor/predecessor of <var>x</var> in <var>S</var>) for strings of length linear in the
+               machine-word size <var>w</var>. Prefix queries are answered in time <i>O</i>(log|<var>x</var>|+<var>k</var>), and range queries in time
+               <i>O</i>(log max{&nbsp;|<var>x</var>|, |y|, |<var>x</var><sup>-</sup>|, |<var>y</var><sup>+</sup>|&nbsp;}+<var>k</var>), where <var>k</var> is the number of elements
+               in the output and  <var>x</var> (and <var>y</var>) represent the input of the
+               prefix (range) queries. Updates are performed within the
+               same bounds in expectation (or with high probability using an appropriate
+               dictionary). We then show a simple modification that makes it
+               possible to handle strings of length up to 2<sup><var>w</var></sup>; in this case, predecessor/successor queries
+               and updates are supported in <i>O</i>(|<var>x</var>|/w + log max{&nbsp;|<var>x</var>|, |<var>x</var><sup>+</sup>|, |<var>x</var><sup>-</sup>|&nbsp;}) time, 
+               (and <i>O</i>(|<var>x</var>|/<var>B</var> + log max{&nbsp;|<var>x</var>|, |<var>x</var><sup>+</sup>|, |<var>x</var><sup>-</sup>|&nbsp;}) I/Os in the cache-oblivious
+               model) with high probability. The space occupied
+               by a dynamic z-fast trie, beside that necessary to store <var>S</var>, is just of 12<var>n</var>
+               pointers, <var>n</var> integers and, in the ``long string'' case, <i>O</i>(<var>n</var>) signatures of
+               <i>O</i>(<var>w</var>) bits each.</p>               
+               },
+  category  = CONVEGNO
+}
+
+@article{FrWSITBFT,
+  title   = {Surpassing the Information Theoretic Bound with Fusion
+             Trees},
+  author  = {Michael L. Fredman and Dan E. Willard},
+  pages   = {424--436},
+  journal = JCSS,
+  year    = {1993},
+  volume  = {47},
+  number  = {3}
+}

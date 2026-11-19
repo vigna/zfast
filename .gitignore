@@ -1,0 +1,15 @@
+/target
+Cargo.lock
+# LaTeX build products
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
+paper/*.out
+paper/*.tdo
+paper/dynzfast.pdf
+.DS_Store
+__pycache__

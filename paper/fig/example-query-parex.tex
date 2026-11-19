@@ -1,0 +1,273 @@
+%\documentclass{article}
+%\usepackage{tikz}
+%\usetikzlibrary{arrows, chains, fit, quotes}
+
+%\begin{document}
+	{
+	\setlength\tabcolsep{0.5em}
+	\begin{tabular}{|l|r|r|r|c|c|c|}
+	\hline
+	& $a$ & $b$ & $f$ & $\beta$ & $e_\beta \prec x$? & Stack (after)\\\hline
+	
+	\rule{0pt}{2.5em}\rule[-2.5em]{0pt}{2.5em}\begin{tikzpicture}[
+	  baseline,
+	  node distance = 0mm,
+	  start chain = A going right,
+	  txt/.style = {text height=2ex, text depth=0.25ex, 
+	                 on chain},
+	  every edge/.append style = {draw, -stealth'}
+	  ]
+
+	\node [txt] {$\mathbf{0111}$};     % nodes are in the chain
+	\draw [dashed] ([xshift=3pt, yshift=-6pt]A-1.south west) -- ([xshift=3pt, yshift=6pt]A-1.north west);
+	\node [txt] {$\mathbf{0}$};
+	\node [txt] {$\mathbf{101}$};
+	\draw [dashed] ([xshift=-3pt, yshift=-6pt]A-3.south east) -- ([xshift=-3pt, yshift=6pt]A-3.north east);
+	\node [txt] {$\mathbf{1}$};
+	\node [txt] {$\mathbf{111}0$};
+	\draw [dashed] ([xshift=-10pt, yshift=-6pt]A-5.south east) -- ([xshift=-10pt, yshift=6pt]A-5.north east);
+	\node [txt] {$0001100$};
+	%
+	\node (g) [draw=black, fill=black!50, fill opacity=0.2, inner ysep=12pt, inner xsep=0,
+		   fit=(A-1) (A-6)] {};
+	
+	\node (f1)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_0$, 
+	             fit=(A-1) (A-1)] {};
+	\node (f3)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_1$,
+	             fit=(A-3) (A-3)] {};
+
+	\node (f5)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_5$,
+	             fit=(A-5) (A-5)] {};
+
+	\draw ([xshift=4pt, yshift=-12pt]A-1.south west) -- ([xshift=4pt, yshift=12pt]A-1.north west);
+       \end{tikzpicture}
+    & $0$ & $20$ & $0$ & $\alpha_0$ & yes & $\langle \alpha_0\rangle$\\\hline
+
+    %%%%%%
+	\rule{0pt}{2.5em}\rule[-2.5em]{0pt}{2.5em}\begin{tikzpicture}[
+	  baseline,
+	  node distance = 0mm,
+	  start chain = A going right,
+	  txt/.style = {text height=2ex, text depth=0.25ex, 
+	                 on chain},
+	  every edge/.append style = {draw, -stealth'}
+	  ]
+
+	\node [txt] {$\mathbf{0111}$};     % nodes are in the chain
+	\draw [dashed] ([xshift=3pt, yshift=-6pt]A-1.south west) -- ([xshift=3pt, yshift=6pt]A-1.north west);
+	\node [txt] {$\mathbf{0}$};
+	\node [txt] {$\mathbf{101}$};
+	\draw [dashed] ([xshift=-3pt, yshift=-6pt]A-3.south east) -- ([xshift=-3pt, yshift=6pt]A-3.north east);
+	\node [txt] {$\mathbf{1}$};
+	\node [txt] {$\mathbf{111}0$};
+	\draw [dashed] ([xshift=-10pt, yshift=-6pt]A-5.south east) -- ([xshift=-10pt, yshift=6pt]A-5.north east);
+	\node [txt] {$0001100$};
+	%
+	\node (g) [draw=black, fill=black!50, fill opacity=0.2, inner ysep=12pt, inner xsep=0,
+		   fit=(A-3) (A-6)] {};
+	
+	\node (f1)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_0$, 
+	             fit=(A-1) (A-1)] {};
+	\node (f3)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_1$,
+	             fit=(A-3) (A-3)] {};
+
+	\node (f5)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_5$,
+	             fit=(A-5) (A-5)] {};
+
+	\draw ([xshift=128pt, yshift=-12pt]A-1.south west) -- ([xshift=128pt, yshift=12pt]A-1.north west);
+    \end{tikzpicture}
+    & $5$ & $20$ & $16$ & $\bot$ & - & $\langle \alpha_0\rangle$\\\hline
+
+    %%%%%%
+	\rule{0pt}{2.5em}\rule[-2.5em]{0pt}{2.5em}\begin{tikzpicture}[
+	  baseline,
+	  node distance = 0mm,
+	  start chain = A going right,
+	  txt/.style = {text height=2ex, text depth=0.25ex, 
+	                 on chain},
+	  every edge/.append style = {draw, -stealth'}
+	  ]
+
+	\node [txt] {$\mathbf{0111}$};     % nodes are in the chain
+	\draw [dashed] ([xshift=3pt, yshift=-6pt]A-1.south west) -- ([xshift=3pt, yshift=6pt]A-1.north west);
+	\node [txt] {$\mathbf{0}$};
+	\node [txt] {$\mathbf{101}$};
+	\draw [dashed] ([xshift=-3pt, yshift=-6pt]A-3.south east) -- ([xshift=-3pt, yshift=6pt]A-3.north east);
+	\node [txt] {$\mathbf{1}$};
+	\node [txt] {$\mathbf{111}0$};
+	\draw [dashed] ([xshift=-10pt, yshift=-6pt]A-5.south east) -- ([xshift=-10pt, yshift=6pt]A-5.north east);
+	\node [txt] {$0001100$};
+	%
+	\node (g) [draw=black, fill=black!50, fill opacity=0.2, inner ysep=12pt, inner xsep=0, minimum width=80pt, minimum height=40pt, anchor=west] at (A-3.west){};
+	
+	\node (f1)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_0$, 
+	             fit=(A-1) (A-1)] {};
+	\node (f3)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_1$,
+	             fit=(A-3) (A-3)] {};
+
+	\node (f5)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_5$,
+	             fit=(A-5) (A-5)] {};
+
+	\draw ([xshift=66pt, yshift=-12pt]A-1.south west) -- ([xshift=66pt, yshift=12pt]A-1.north west);
+    \end{tikzpicture}
+    & $5$ & $15$ & $8$ & $\alpha_1$ & yes & $\langle \alpha_0, \alpha_1\rangle$\\\hline
+
+    %%%%%%
+	\rule{0pt}{2.5em}\rule[-2.5em]{0pt}{2.5em}\begin{tikzpicture}[
+	  baseline,
+	  node distance = 0mm,
+	  start chain = A going right,
+	  txt/.style = {text height=2ex, text depth=0.25ex, 
+	                 on chain},
+	  every edge/.append style = {draw, -stealth'}
+	  ]
+
+	\node [txt] {$\mathbf{0111}$};     % nodes are in the chain
+	\draw [dashed] ([xshift=3pt, yshift=-6pt]A-1.south west) -- ([xshift=3pt, yshift=6pt]A-1.north west);
+	\node [txt] {$\mathbf{0}$};
+	\node [txt] {$\mathbf{101}$};
+	\draw [dashed] ([xshift=-3pt, yshift=-6pt]A-3.south east) -- ([xshift=-3pt, yshift=6pt]A-3.north east);
+	\node [txt] {$\mathbf{1}$};
+	\node [txt] {$\mathbf{111}0$};
+	\draw [dashed] ([xshift=-10pt, yshift=-6pt]A-5.south east) -- ([xshift=-10pt, yshift=6pt]A-5.north east);
+	\node [txt] {$0001100$};
+	%
+	\node (g) [draw=black, fill=black!50, fill opacity=0.2, inner ysep=12pt, inner xsep=0, minimum width=43pt, minimum height=40pt, anchor=west] at (A-5.west){};
+	
+	\node (f1)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_0$, 
+	             fit=(A-1) (A-1)] {};
+	\node (f3)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_1$,
+	             fit=(A-3) (A-3)] {};
+
+	\node (f5)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_5$,
+	             fit=(A-5) (A-5)] {};
+
+	\draw ([xshift=101pt, yshift=-12pt]A-1.south west) -- ([xshift=101pt, yshift=12pt]A-1.north west);
+    \end{tikzpicture}
+    & $9$ & $15$ & $12$ & $\alpha_5$ & no & $\langle \alpha_0, \alpha_1\rangle$\\\hline
+
+    %%%%%%
+	\rule{0pt}{2.5em}\rule[-2.5em]{0pt}{2.5em}\begin{tikzpicture}[
+	  baseline,
+	  node distance = 0mm,
+	  start chain = A going right,
+	  txt/.style = {text height=2ex, text depth=0.25ex, 
+	                 on chain},
+	  every edge/.append style = {draw, -stealth'}
+	  ]
+
+	\node [txt] {$\mathbf{0111}$};     % nodes are in the chain
+	\draw [dashed] ([xshift=3pt, yshift=-6pt]A-1.south west) -- ([xshift=3pt, yshift=6pt]A-1.north west);
+	\node [txt] {$\mathbf{0}$};
+	\node [txt] {$\mathbf{101}$};
+	\draw [dashed] ([xshift=-3pt, yshift=-6pt]A-3.south east) -- ([xshift=-3pt, yshift=6pt]A-3.north east);
+	\node [txt] {$\mathbf{1}$};
+	\node [txt] {$\mathbf{111}0$};
+	\draw [dashed] ([xshift=-10pt, yshift=-6pt]A-5.south east) -- ([xshift=-10pt, yshift=6pt]A-5.north east);
+	\node [txt] {$0001100$};
+	%
+	\node (g) [draw=black, fill=black!50, fill opacity=0.2, inner ysep=12pt, inner xsep=0, minimum width=20pt, minimum height=40pt, anchor=west] at (A-5.west){};
+	
+	\node (f1)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_0$, 
+	             fit=(A-1) (A-1)] {};
+	\node (f3)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_1$,
+	             fit=(A-3) (A-3)] {};
+
+	\node (f5)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_5$,
+	             fit=(A-5) (A-5)] {};
+
+	\draw ([xshift=89pt, yshift=-12pt]A-1.south west) -- ([xshift=89pt, yshift=12pt]A-1.north west);
+    \end{tikzpicture}
+    & $9$ & $11$ & $10$ & $\bot$ & - & $\langle \alpha_0, \alpha_1\rangle$\\\hline
+
+    %%%%%%
+	\rule{0pt}{2.5em}\rule[-2.5em]{0pt}{2.5em}\begin{tikzpicture}[
+	  baseline,
+	  node distance = 0mm,
+	  start chain = A going right,
+	  txt/.style = {text height=2ex, text depth=0.25ex, 
+	                 on chain},
+	  every edge/.append style = {draw, -stealth'}
+	  ]
+
+	\node [txt] {$\mathbf{0111}$};     % nodes are in the chain
+	\draw [dashed] ([xshift=3pt, yshift=-6pt]A-1.south west) -- ([xshift=3pt, yshift=6pt]A-1.north west);
+	\node [txt] {$\mathbf{0}$};
+	\node [txt] {$\mathbf{101}$};
+	\draw [dashed] ([xshift=-3pt, yshift=-6pt]A-3.south east) -- ([xshift=-3pt, yshift=6pt]A-3.north east);
+	\node [txt] {$\mathbf{1}$};
+	\node [txt] {$\mathbf{111}0$};
+	\draw [dashed] ([xshift=-10pt, yshift=-6pt]A-5.south east) -- ([xshift=-10pt, yshift=6pt]A-5.north east);
+	\node [txt] {$0001100$};
+	%
+	\node (g) [draw=black, fill=black!50, fill opacity=0.2, inner ysep=12pt, inner xsep=0, minimum width=10pt, minimum height=40pt, anchor=west] at (A-5.west){};
+	
+	\node (f1)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_0$, 
+	             fit=(A-1) (A-1)] {};
+	\node (f3)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_1$,
+	             fit=(A-3) (A-3)] {};
+
+	\node (f5)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_5$,
+	             fit=(A-5) (A-5)] {};
+
+	\draw ([xshift=88pt, yshift=-12pt]A-1.south west) -- ([xshift=88pt, yshift=12pt]A-1.north west);
+    \end{tikzpicture}
+    & $9$ & $9$ & $9$ & $\bot$ & - & $\langle \alpha_0, \alpha_1\rangle$\\\hline
+
+    %%%%%%
+	\rule{0pt}{2.5em}\rule[-2.5em]{0pt}{2.5em}\begin{tikzpicture}[
+	  baseline,
+	  node distance = 0mm,
+	  start chain = A going right,
+	  txt/.style = {text height=2ex, text depth=0.25ex, 
+	                 on chain},
+	  every edge/.append style = {draw, -stealth'}
+	  ]
+
+	\node [txt] {$\mathbf{0111}$};     % nodes are in the chain
+	\draw [dashed] ([xshift=3pt, yshift=-6pt]A-1.south west) -- ([xshift=3pt, yshift=6pt]A-1.north west);
+	\node [txt] {$\mathbf{0}$};
+	\node [txt] {$\mathbf{101}$};
+	\draw [dashed] ([xshift=-3pt, yshift=-6pt]A-3.south east) -- ([xshift=-3pt, yshift=6pt]A-3.north east);
+	\node [txt] {$\mathbf{1}$};
+	\node [txt] {$\mathbf{111}0$};
+	\draw [dashed] ([xshift=-10pt, yshift=-6pt]A-5.south east) -- ([xshift=-10pt, yshift=6pt]A-5.north east);
+	\node [txt] {$0001100$};
+	%
+	\node (f1)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_0$, 
+	             fit=(A-1) (A-1)] {};
+	\node (f3)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_1$,
+	             fit=(A-3) (A-3)] {};
+
+	\node (f5)  [draw=black, inner sep=0pt, 
+	             label=below:$\alpha_5$,
+	             fit=(A-5) (A-5)] {};
+
+    \end{tikzpicture}
+    & $8$ & $9$ & - & - & - & $\langle \alpha_0, \alpha_1\rangle$\\\hline
+
+    \end{tabular}
+    }
+
+
+%\end{document}

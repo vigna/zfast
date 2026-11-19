@@ -1,0 +1,38 @@
+		\begin{tikzpicture}[scale=0.25,every node/.style={scale=0.6}]
+				\draw[decoration={snake, amplitude=0.5mm, segment length=2mm}] decorate{(0, 19) -- (-2, 15)};
+				\draw[decoration={snake, amplitude=0.5mm, segment length=2mm}] decorate{(-2, 15) -- (11, 13)};
+				\draw[decoration={snake, amplitude=0.5mm, segment length=2mm}] decorate{(11, 13) -- (10, 11)};
+				\draw[decoration={snake, amplitude=0.5mm, segment length=2mm}] decorate{(10, 11) -- (6, 5)                     % last (right-directed) {snake, amplitude=0.5mm, segment length=2mm}
+					node[pos=0, draw, circle, fill, radius=0.1pt] (sa) {}           % starting points of jump pointers
+					node[pos=0.35, draw, circle, fill, radius=0.1pt] (sb) {} 
+					node[pos=0.55, draw, circle, fill, radius=0.1pt] (sc) {} 
+					node[pos=.7, draw, circle, fill, radius=0.1pt] (sd) {} 
+					node[pos=.85, draw, circle, fill, radius=0.1pt] (se) {} 
+					node[pos=.95, draw, circle, fill, radius=0.1pt] (sf) {} 
+				};
+				% last arc, exit node
+				\draw[thick] (6,5) -- (5, 4)
+					node (exit) [draw, rectangle, fill=lgray, minimum width=20, minimum height=60, anchor=north] {}; 
+				% exit node division
+				\coordinate (dividinglineleft) at ($(exit.north west)!0.3!(exit.south west)$);
+				\coordinate (dividinglineright) at ($(exit.north east)!0.3!(exit.south east)$);
+				\draw (dividinglineleft) -- (dividinglineright);
+				% ending points within node
+				\coordinate (ef) at ($(exit.north west)!0.5!(dividinglineleft)$);
+				\coordinate (ee) at ($(dividinglineleft)!0.1!(exit.south west)$);
+				\coordinate (ed) at ($(dividinglineleft)!0.5!(exit.south west)$);
+				% triangle
+				\draw (exit.south) -- 
+					++(-4, -5)                                                       % triangle, left side
+						node[pos=0.1, draw, circle, radius=0.4pt] (ec) {} 
+						node[pos=0.3, draw, circle, radius=0.4pt] (eb) {} 
+						node[pos=0.9, draw, circle, radius=0.4pt] (ea) {} 
+					-- ++(8, 0) -- ++(-4, 5);
+				% draw jumps
+				\draw[->, dotted] (sa) to[bend right=100] (ea);
+				\draw[->, dotted] (sb) to[bend right=100] (eb);
+				\draw[->, dotted] (sc) to[bend right=100] (ec);
+				\draw[->, dotted] (sd) to[bend right=100] (ed);
+				\draw[->, dotted] (se) to[bend right=100] (ee);
+				\draw[->, dotted] (sf) to[bend right=100] (ef);
+		\end{tikzpicture}
