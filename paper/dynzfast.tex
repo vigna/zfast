@@ -248,7 +248,7 @@ lower bounds~\cite{Patrascu2006Timespace,PaTRDNHSP}, and so has the dynamic vers
 in expectation~\cite{Patrascu2014Dynamic}. If only linear space is available, in a significant
 number of cases, which include polynomial universes, 
 variants of the van Emde Boas tree~\cite{EKZDIEPQ} that answer in time $O(\lg\ell)$ are
-optimal even in the static setting using randomization (see Section~\ref{sec:related} for a precise statement). 
+optimal, even in the static setting and even if randomization is allowed (see Section~\ref{sec:related} for a precise statement). 
 Among such variants we
 quote Willard's \emph{y-fast trie}~\cite{WilLLWRQ} and Mehlhorn and N\"aher's
 structure~\cite{MeNBOD}, which uses dynamic perfect hashing~\cite{DKMDPHULB}. 
@@ -412,10 +412,11 @@ All these structures reduce the \emph{length} of the keys,
 and their time bounds do not depend on $n$. The other approach reduces the \emph{number} of keys: fusion
 trees~\cite{FrWSITBFT} answer queries in time $O(\lg n/\lg w)$, and the exponential search trees of 
 Andersson and Thorup~\cite{AnTDOSEST} provide deterministic, worst-case bounds in linear space for
-queries and updates, such as $O\bigl(\sqrt{\lg n/\lg\lg n}\bigr)$, which is optimal as a function of $n$ alone~\cite{Beame2002Optimal}.
+queries and updates, such as $O\bigl(\sqrt{\lg n/\lg\lg n}\bigr)$ (using the static structure of Beame and Fich~\cite{Beame2002Optimal}, who also show that this bound is optimal as a function of $n$ alone).
 
-P\v{a}tra\c{s}cu and Thorup settled the static problem~\cite{Patrascu2006Timespace,PaTRDNHSP}, providing 
-matching upper and lower bounds for every combination of $n$, $\ell$, $w$ and of the available space. 
+P\u{a}tra\c{s}cu and Thorup settled the static problem~\cite{Patrascu2006Timespace,PaTRDNHSP}, providing 
+matching upper and lower bounds for every combination of $n$, $\ell$, $w$ and of the available space: the upper bounds are attained by 
+deterministic query algorithms, and the lower bounds hold in the cell-probe model, even for randomized query algorithms with constant two-sided error probability~\cite{PaTRDNHSP}. 
 In particular, they note that when $w=\ell=\gamma\lg n$ for some $\gamma>1$ (i.e., for polynomial universes) and 
 space is near linear the optimal search time is $\Theta(\lg \ell)$, so van Emde Boas trees and their variants are optimal. 
 More recently, the same authors settled the dynamic problem~\cite{Patrascu2014Dynamic}: 
@@ -444,27 +445,36 @@ using a compacted trie, a single hash table, and one prefix per node. Some of th
 engineered: Dinklage, Fischer and Herlez~\cite{Dinklage2021Engineering} evaluate dynamic predecessor structures for keys of $32$, 
 $40$ and $64$ bits, including variants of y-fast tries and dynamic fusion nodes.
 
-Other queries on integers are easier than predecessor search: for instance, Mortensen, Pagh and P\v{a}tra\c{s}cu~\cite{Mortensen2005Dynamic} 
-show that one can report an element of a query interval (i.e., answer existential range queries, and thus existential prefix
-queries) in time $O(\lg\lg w)$ with updates in time $O(\lg w)$. The z-fast trie answers 
+Other queries on integers are easier than predecessor search: for instance, Mortensen, Pagh and P\u{a}tra\c{s}cu~\cite{Mortensen2005Dynamic} 
+show that in linear space one can report an element of a query interval (i.e., answer existential range queries, and thus existential prefix
+queries) in time $O(\lg\lg w)$ with updates in time $O(\lg w)$, with high probability. The z-fast trie answers 
 such queries within the bounds of predecessor search, and thus not optimally.
-Finally, a few structures provide bounds for predecessor search that depend on the distance $\Delta$ between the query and the answer,
+Finally, a few structures provide bounds for predecessor search that depend on the distance $\Delta$ between the query and its nearest neighbor in the set (i.e., the closer of its predecessor and its successor),
 rather than on the length of the keys: Bose \textit{et al.}~\cite{Bose2013Fast} attain $O(\lg\lg\Delta)$ expected time, but not linear space; 
 the same query time is obtained in the static case by applying fat binary search to a suitably restricted interval~\cite{Belazzougui2012Predecessor},
-and in the dynamic case, in linear space, by the $\Delta$-fast tries of Ehrhardt and Mulzer~\cite{Ehrhardt2017Delta}, which the survey~\cite{Navarro2020Predecessor} describes as a variant of the z-fast trie. 
+and in the dynamic case by the $\Delta$-fast tries of Ehrhardt and Mulzer~\cite{Ehrhardt2017Delta}, which use linear space, 
+answer queries in time $O(\lg\lg\Delta)$ in the worst case and perform updates in expected time $O(\lg\lg\Delta)$. 
+The $\Delta$-fast trie is built on a compacted trie on integers of $w$ bits with a z-map (the hash map of ``associated keys'' of~\cite{Ehrhardt2017Delta}), 
+and adds hash tables that make it possible to start the fat binary search close to the bottom of the trie; indeed, the 
+survey~\cite{Navarro2020Predecessor} describes it as a variant of the z-fast trie. 
+To reach the leftmost and rightmost leaf under a node, instead of jump pointers it uses a decomposition of the trie into paths, each represented by a sequence of balanced trees. 
 Cohen \textit{et al.}~\cite{Cohen2015Minimal} use small z-fast tries as a component of a static index of $O(n\lg w)$ bits that answers successor queries 
 with a constant number of accesses to the keys.
 
 \paragraph{Binary search on prefix lengths.} The idea of locating the longest prefix of a query that appears in a set of strings by a binary search on its \emph{length}, 
 using hashing to test whether a prefix appears, goes back to x-fast tries~\cite{WilLLWRQ}; it was rediscovered in the context 
-of IP routing by Waldvogel \textit{et al.}~\cite{Waldvogel1997Scalable}, who use a hash table for each prefix length. 
+of IP routing by Waldvogel \textit{et al.}~\cite{Waldvogel1997Scalable}, who use a hash table for each prefix 
+length.\footnote{The journal version~\cite{Waldvogel2001Scalable} mentions the stratified trees of van Emde Boas~\cite{EKZDIEPQ} as the closest 
+previous work, but not x-fast tries.} 
 For the search to work, a failed probe must imply that no longer prefix exists: x-fast tries achieve this by storing 
-\emph{all} prefixes of all keys, whereas Waldvogel \textit{et al.}~store, for each string of the set, a \emph{marker} at each length that a binary search might probe 
-before reaching the length of the string, which means up to $\lg L$ markers for strings of length at most $L$. 
+\emph{all} prefixes of all keys, whereas Waldvogel \textit{et al.}~store, for each string of the set, a \emph{marker} at each shorter length that the binary search 
+probes before reaching the length of the string, which means up to $\lg L$ markers for strings of length at most $L$. 
 In both cases the number of entries stored per string depends on the length of the strings. 
 The z-map, instead, contains a single entry for each internal node of the compacted trie: the handle, whose length 
-is the $2$-fattest number in the skip interval of the node. In fact, the lengths at which Waldvogel \textit{et al.}~place 
-the markers for a string of length $l$ are obtained by clearing, one at a time, the lowest bits set in $l$, 
+is the $2$-fattest number in the skip interval of the node. In fact, in the basic scheme of Waldvogel \textit{et al.}, when the binary search 
+is a plain bisection on all lengths smaller than a power of two, the lengths at which the markers for a string of length $l$ are placed 
+are obtained by clearing, one at a time, the lowest bits set in $l$~\cite{Waldvogel2001Scalable} (their optimized variants skip the lengths 
+that do not appear in the set and adapt the sequence of probes to the prefixes matched so far, so the markers are placed along a different search path), 
 and the handle length of a node whose extent has length $l$ is the last number of this sequence (starting from $l$ itself) that
 belongs to the skip interval: the fat binary search described in this paper makes the search work with this entry only.
 
@@ -496,8 +506,9 @@ comparisons, the analogous term in the trie technique is due to
 accesses to dictionaries, an operation that in practice is orders of magnitude slower.
 
 Several results take the size $\sigma$ of the alphabet into account. Fischer and Gawrychowski~\cite{Fischer2015Alphabet} 
-describe a deterministic compacted trie that answers prefix and predecessor queries for a pattern of $m$ characters in time $O(m+\lg\lg\sigma)$, 
-and a dynamic variant with a slightly larger additive term; characters, however, are handled one at a time. 
+describe a deterministic compacted trie that answers prefix and predecessor queries for a pattern of $m$ characters in time $O(m+\lg\lg\sigma)$
+in the worst case, and a variant supporting insertions (but not deletions) in which queries and insertions 
+take time $O\bigl(m+\lg^2\lg\sigma/\lg\lg\lg\sigma\bigr)$; characters, however, are handled one at a time. 
 Bille, G{\o}rtz and Skjoldjensen~\cite{Bille2017Deterministic} give a static, deterministic index for a packed string
 with query time $O(m/\alpha+\lg m+\lg\lg\sigma)$, where $\alpha=w/\lg\sigma$ is the number of characters in a word, which is the shape of 
 our bound for long strings. After the preliminary version of this paper appeared, hash-based dynamic tries working on packed strings have been proposed: 
@@ -516,10 +527,15 @@ necessary to read the query and the lower bounds for strings of one word, which,
 thus, the discussion above about the optimality of the term $\lg|x|$ on integers applies to strings as well, 
 and nothing is known about the terms depending on $|x^-|$ and $|x^+|$.
 
-\paragraph{Strings in external memory.} In the I/O model, string B-trees~\cite{FeGSBT} provide predecessor and successor queries, and updates, using
-$O(|x|/B+\lg_B n)$ I/Os, but they depend on the knowledge of $B$. In the cache-oblivious model, the same bound is obtained for prefix queries on a static set
-by Brodal and Fagerberg~\cite{Brodal2006Cacheoblivious}, and bounds of the same form are obtained by the cache-oblivious string B-trees of
-Bender, Farach-Colton and Kuszmaul~\cite{Bender2006Cacheoblivious}, which are dynamic. 
+\paragraph{Strings in external memory.} In the I/O model, string B-trees~\cite{FeGSBT} locate a string $x$ in a sorted set of $n$ strings
+(thus providing predecessor and successor queries), and insert or delete it, using
+$O(|x|/B+\lg_B n)$ I/Os, deterministically and in the worst case, with $O(k/B)$ additional I/Os to report the $k$ results of a prefix or range query; 
+besides the strings, they use $\Theta(n/B)$ blocks. They depend, however, on the knowledge of $B$. In the cache-oblivious model, the same bound is obtained for prefix queries on a static set
+by Brodal and Fagerberg~\cite{Brodal2006Cacheoblivious}. The cache-oblivious string B-trees of
+Bender, Farach-Colton and Kuszmaul~\cite{Bender2006Cacheoblivious} are dynamic and randomized: under the tall-cache
+assumption, with high probability they answer membership queries in $O(|x|/B+\lg_B n)$ I/Os and predecessor and successor
+queries in $O((|x|+|x^\pm|)/B+\lg_B n)$ I/Os; updates are amortized, and require $O(|x|\lg^2 n/B+\lg_B n)$ I/Os
+if the keys are kept sorted on disk, and $O(|x|/B+\lg_B n)$ I/Os otherwise. 
 These bounds are in general incomparable to ours, which do not depend on $n$: we replace $\lg_B n$ with the logarithm of the length of the strings involved. 
 As we already remarked, the structure of Ru\v{z}i\'c~\cite{Ruzic2009Making} has the same I/O bounds as ours for queries in the static case.
 Finally, note
@@ -539,12 +555,13 @@ The structure closest to ours is Wormhole~\cite{WNJWormhole}: the keys are store
 each leaf is associated with a short string, its \emph{anchor}, that separates its keys from those of the previous leaf, 
 and all the prefixes of all anchors are stored in a hash table; the leaf associated with a key is found by a binary search on the prefix length, 
 which uses short hashes as signatures and performs a single string comparison at the end, as we do in Section~\ref{sec:sign}. 
-The authors credit Waldvogel \textit{et al.}~\cite{Waldvogel1997Scalable} for the binary search on prefix lengths; x-fast, y-fast and z-fast tries are not mentioned. 
+The authors credit Waldvogel \textit{et al.}~\cite{Waldvogel1997Scalable} for the binary search on prefix lengths; x-fast, y-fast and z-fast tries are not mentioned, 
+and the structure is presented as the first ordered index with a lookup cost logarithmic in the length of the keys. 
 In fact, the organization of Wormhole is that of a y-fast trie for variable-length strings of bytes: buckets of keys, 
 and a structure storing all prefixes of one representative per bucket. 
 Since a hash table contains all the prefixes of the anchors, the number of its entries, and the cost of splitting a leaf, depend on the 
 length of the anchors, whereas a z-map on the same anchors would contain one entry per anchor. On the other hand, as all prefixes are present 
-a plain bisection suffices. As only one string per leaf is indexed, the hash table is a small fraction of the whole index~\cite{WNJWormhole}; 
+a plain bisection suffices. As only one string per leaf is indexed, the hash table is a small fraction of the whole index (from $0.34$\% to $3.7$\% on the data sets of~\cite{WNJWormhole}); 
 the same approach can of course be applied to z-fast tries. 
 The z-fast trie has also been used as a building block of a trie for the processing-in-memory model~\cite{Kang2023PIM}.
 
@@ -2247,7 +2264,7 @@ Finally, in the case of the signed z-fast trie we need to store a signature of $
 % pointers and an integer, and internal nodes contains five pointers and an integer: so the trie
 % occupies $(9p+2w)n$ bits (where $p$ is the bit size of a pointer). 
 
- \begin{figure}[h!]
+ \begin{figure}[ht!]
  \centering
  \includegraphics[scale=.6]{fig/trienodes-3.pdf}
   $\quad$
