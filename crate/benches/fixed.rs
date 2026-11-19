@@ -61,18 +61,18 @@ fn bench_queries<H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs>(
     });
 }
 
-fn bench_trie<H: HashPrefixes>(c: &mut Criterion, name: &str, w: &Workload) {
+fn bench_trie<H: HashPrefixes>(c: &mut Criterion, name: &str, w: &Workload, ratio: usize) {
     let sorted = w.sorted();
     c.benchmark_group("build")
         .sample_size(10)
         .bench_function(name, |b| {
             b.iter_batched(
                 || sorted.clone(),
-                |sorted| <StaticZFastTrie<_, H>>::new(sorted).unwrap(),
+                |sorted| <StaticZFastTrie<_, H>>::with_ratio(sorted, ratio).unwrap(),
                 BatchSize::LargeInput,
             )
         });
-    let trie = <StaticZFastTrie<_, H>>::new(sorted).unwrap();
+    let trie = <StaticZFastTrie<_, H>>::with_ratio(sorted, ratio).unwrap();
     bench_queries(c, name, &trie, w);
     // The same structure with directories based on Elias-Fano
     bench_queries(c, &format!("{name} (EfDirs)"), &trie.into_ef(), w);
@@ -101,8 +101,9 @@ fn benches(c: &mut Criterion) {
     let n = std::env::var("ZFAST_N").map_or(1_000_000, |s| s.parse().expect("ZFAST_N"));
     let spec = std::env::var("ZFAST_KEYS").unwrap_or("urls".into());
     let w = Workload::new(&spec, n);
-    bench_trie::<zfast::utils::Xxh3>(c, "StaticZFastTrie", &w);
-    bench_trie::<Chain>(c, "StaticZFastTrie<Chain>", &w);
+    bench_trie::<zfast::utils::Xxh3>(c, "StaticZFastTrie", &w, 1);
+    bench_trie::<zfast::utils::Xxh3>(c, "StaticZFastTrie, ratio 16", &w, 16);
+    bench_trie::<Chain>(c, "StaticZFastTrie<Chain>", &w, 1);
     bench_binary_search(c, &w);
 }
 

@@ -10,7 +10,7 @@
 //! cargo run --release --example scale -- STRUCTURE KEYS [N] [REPS]
 //! ```
 //!
-//! `STRUCTURE` is one of `zft`, `zft-chain`, `btree`, `szft`, `szft-chain`,
+//! `STRUCTURE` is one of `zset`, `zft`, `zft-chain`, `btree`, `szft`, `szft-chain`,
 //! `bsearch`, or `all` (the static structures are built for each sampling
 //! ratio in the comma-separated list of the environment variable
 //! `ZFAST_RATIOS`, which defaults to `1,16`). `KEYS` is the name of a file containing one key per
@@ -33,7 +33,7 @@ use std::io::{BufRead, BufReader};
 use std::ops::Bound::{Excluded, Included, Unbounded};
 use std::time::Instant;
 use zfast::utils::{Chain, HashPrefixes, Xxh3};
-use zfast::{KeySeq, PackedKeys, StaticZFastTrie, ZFastTrie};
+use zfast::{KeySeq, PackedKeys, StaticZFastTrie, ZFastSet, ZFastTrie};
 
 type Keys = Vec<Box<[u8]>>;
 
@@ -135,81 +135,81 @@ fn report(name: &str, op: &str, (ns, sum): (f64, usize), extra: &str) {
     println!("{name:14} {op:14} {ns:9.1} ns  [{sum:20}] {extra}");
 }
 
-fn bench_dynamic<H: HashPrefixes>(
-    name: &str,
-    ins: &PackedKeys,
-    hits: &PackedKeys,
-    misses: &PackedKeys,
-    reps: usize,
-) {
-    let mut trie = <ZFastTrie<H>>::new();
-    let t = time(ins, 1, |k| trie.insert(k) as usize);
-    report(
-        name,
-        "insert",
-        t,
-        &format!("{:.1} B/key", trie.mem_size() as f64 / ins.len() as f64),
-    );
-    report(
-        name,
-        "contains-hit",
-        time(hits, reps, |k| trie.contains(k) as usize),
-        "",
-    );
-    report(
-        name,
-        "contains-miss",
-        time(misses, reps, |k| trie.contains(k) as usize),
-        "",
-    );
-    report(
-        name,
-        "pred-hit",
-        time(hits, reps, |k| trie.pred(k).map_or(0, |p| p.len())),
-        "",
-    );
-    report(
-        name,
-        "pred-miss",
-        time(misses, reps, |k| trie.pred(k).map_or(0, |p| p.len())),
-        "",
-    );
-    report(
-        name,
-        "succ-miss",
-        time(misses, reps, |k| trie.succ_strict(k).map_or(0, |p| p.len())),
-        "",
-    );
-    let start = Instant::now();
-    let sum = trie.iter().map(|k| k.len()).sum::<usize>();
-    report(
-        name,
-        "iterate",
-        (start.elapsed().as_nanos() as f64 / ins.len() as f64, sum),
-        "",
-    );
-    report(
-        name,
-        "remove-miss",
-        time(misses, 1, |k| trie.remove(k) as usize),
-        "",
-    );
-    report(
-        name,
-        "remove",
-        time(hits, 1, |k| trie.remove(k) as usize),
-        "",
-    );
-    assert!(trie.is_empty());
-    // Sorted insertion
-    let sorted = sorted(ins);
-    let mut trie = <ZFastTrie<H>>::new();
-    report(
-        name,
-        "insert-sorted",
-        time(&sorted, 1, |k| trie.insert(k) as usize),
-        "",
-    );
+/// Benchmarks a dynamic structure of the crate: they have the same methods,
+/// but no common trait.
+macro_rules! bench_dynamic {
+    ($ty:ty, $name:expr, $ins:expr, $hits:expr, $misses:expr, $reps:expr) => {{
+        let (name, ins, hits, misses, reps): (&str, &PackedKeys, &PackedKeys, &PackedKeys, usize) =
+            ($name, $ins, $hits, $misses, $reps);
+        let mut trie = <$ty>::new();
+        let t = time(ins, 1, |k| trie.insert(k) as usize);
+        report(
+            name,
+            "insert",
+            t,
+            &format!("{:.1} B/key", trie.mem_size() as f64 / ins.len() as f64),
+        );
+        report(
+            name,
+            "contains-hit",
+            time(hits, reps, |k| trie.contains(k) as usize),
+            "",
+        );
+        report(
+            name,
+            "contains-miss",
+            time(misses, reps, |k| trie.contains(k) as usize),
+            "",
+        );
+        report(
+            name,
+            "pred-hit",
+            time(hits, reps, |k| trie.pred(k).map_or(0, |p| p.len())),
+            "",
+        );
+        report(
+            name,
+            "pred-miss",
+            time(misses, reps, |k| trie.pred(k).map_or(0, |p| p.len())),
+            "",
+        );
+        report(
+            name,
+            "succ-miss",
+            time(misses, reps, |k| trie.succ_strict(k).map_or(0, |p| p.len())),
+            "",
+        );
+        let start = Instant::now();
+        let sum = trie.iter().map(|k| k.len()).sum::<usize>();
+        report(
+            name,
+            "iterate",
+            (start.elapsed().as_nanos() as f64 / ins.len() as f64, sum),
+            "",
+        );
+        report(
+            name,
+            "remove-miss",
+            time(misses, 1, |k| trie.remove(k) as usize),
+            "",
+        );
+        report(
+            name,
+            "remove",
+            time(hits, 1, |k| trie.remove(k) as usize),
+            "",
+        );
+        assert!(trie.is_empty());
+        // Sorted insertion
+        let sorted = sorted(ins);
+        let mut trie = <$ty>::new();
+        report(
+            name,
+            "insert-sorted",
+            time(&sorted, 1, |k| trie.insert(k) as usize),
+            "",
+        );
+    }};
 }
 
 fn bench_btree(ins: &PackedKeys, hits: &PackedKeys, misses: &PackedKeys, reps: usize) {
@@ -396,11 +396,14 @@ fn main() {
         misses.len()
     );
     let all = args[1] == "all";
+    if all || args[1] == "zset" {
+        bench_dynamic!(ZFastSet, "zset", &ins, &hits, &misses, reps);
+    }
     if all || args[1] == "zft" {
-        bench_dynamic::<Xxh3>("zft", &ins, &hits, &misses, reps);
+        bench_dynamic!(ZFastTrie, "zft", &ins, &hits, &misses, reps);
     }
     if all || args[1] == "zft-chain" {
-        bench_dynamic::<Chain>("zft-chain", &ins, &hits, &misses, reps);
+        bench_dynamic!(ZFastTrie<Chain>, "zft-chain", &ins, &hits, &misses, reps);
     }
     if all || args[1] == "btree" {
         bench_btree(&ins, &hits, &misses, reps);

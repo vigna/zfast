@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
-//! Benchmarks for the dynamic z-fast trie, with `BTreeSet` as a baseline.
+//! Benchmarks for the dynamic structures (`ZFastSet` and `ZFastTrie`), with
+//! `BTreeSet` as a baseline.
 //!
 //! The number of keys can be set with the environment variable `ZFAST_N`
 //! (default: one million), and the keys with `ZFAST_KEYS`: the name of a file
@@ -22,8 +23,8 @@ use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use std::collections::BTreeSet;
 use std::hint::black_box;
 use std::ops::Bound::{Included, Unbounded};
-use zfast::utils::{Chain, HashPrefixes};
-use zfast::{KeySeq, PackedKeys, ZFastTrie};
+use zfast::utils::Chain;
+use zfast::{KeySeq, PackedKeys, ZFastSet, ZFastTrie};
 
 /// Benchmarks a query, cycling through the given strings.
 fn query<R>(
@@ -43,58 +44,63 @@ fn query<R>(
     });
 }
 
-fn bench_trie<H: HashPrefixes>(c: &mut Criterion, name: &str, w: &Workload) {
-    c.benchmark_group("build")
-        .sample_size(10)
-        .bench_function(name, |b| b.iter(|| w.keys.iter().collect::<ZFastTrie<H>>()));
-    let sorted = w.sorted();
-    c.benchmark_group("build_sorted")
-        .sample_size(10)
-        .bench_function(name, |b| b.iter(|| sorted.iter().collect::<ZFastTrie<H>>()));
+/// Benchmarks a structure of the crate: the dynamic structures have the same
+/// methods, but no common trait.
+macro_rules! bench {
+    ($ty:ty, $c:expr, $name:expr, $w:expr) => {{
+        let (c, name, w): (&mut Criterion, &str, &Workload) = ($c, $name, $w);
+        c.benchmark_group("build")
+            .sample_size(10)
+            .bench_function(name, |b| b.iter(|| w.keys.iter().collect::<$ty>()));
+        let sorted = w.sorted();
+        c.benchmark_group("build_sorted")
+            .sample_size(10)
+            .bench_function(name, |b| b.iter(|| sorted.iter().collect::<$ty>()));
 
-    let mut trie: ZFastTrie<H> = w.keys.iter().collect();
-    query(c, "contains_hit", name, &w.hits, |q| trie.contains(q));
-    query(c, "contains_miss", name, &w.misses, |q| trie.contains(q));
-    query(c, "pred_hit", name, &w.hits, |q| {
-        trie.pred(q).map(<[u8]>::len)
-    });
-    query(c, "pred_miss", name, &w.misses, |q| {
-        trie.pred(q).map(<[u8]>::len)
-    });
-    query(c, "succ_miss", name, &w.misses, |q| {
-        trie.succ(q).map(<[u8]>::len)
-    });
-    c.benchmark_group("iter")
-        .sample_size(10)
-        .bench_function(name, |b| {
-            b.iter(|| trie.iter().map(<[u8]>::len).sum::<usize>())
+        let mut trie: $ty = w.keys.iter().collect();
+        query(c, "contains_hit", name, &w.hits, |q| trie.contains(q));
+        query(c, "contains_miss", name, &w.misses, |q| trie.contains(q));
+        query(c, "pred_hit", name, &w.hits, |q| {
+            trie.pred(q).map(<[u8]>::len)
         });
-    // An insertion followed by a deletion, in a trie of constant size
-    let mut i = 0;
-    c.benchmark_group("insert_remove")
-        .bench_function(name, |b| {
-            b.iter(|| {
-                let q = w.misses.key(i);
-                i = (i + 1) % w.misses.len();
-                trie.insert(q);
-                trie.remove(q)
-            })
+        query(c, "pred_miss", name, &w.misses, |q| {
+            trie.pred(q).map(<[u8]>::len)
         });
-    // The deletion of all keys
-    c.benchmark_group("remove_all")
-        .sample_size(10)
-        .bench_function(name, |b| {
-            b.iter_batched(
-                || w.keys.iter().collect::<ZFastTrie<H>>(),
-                |mut trie| {
-                    for key in w.hits.iter() {
-                        trie.remove(key);
-                    }
-                    trie
-                },
-                BatchSize::LargeInput,
-            )
+        query(c, "succ_miss", name, &w.misses, |q| {
+            trie.succ(q).map(<[u8]>::len)
         });
+        c.benchmark_group("iter")
+            .sample_size(10)
+            .bench_function(name, |b| {
+                b.iter(|| trie.iter().map(<[u8]>::len).sum::<usize>())
+            });
+        // An insertion followed by a deletion, in a trie of constant size
+        let mut i = 0;
+        c.benchmark_group("insert_remove")
+            .bench_function(name, |b| {
+                b.iter(|| {
+                    let q = w.misses.key(i);
+                    i = (i + 1) % w.misses.len();
+                    trie.insert(q);
+                    trie.remove(q)
+                })
+            });
+        // The deletion of all keys
+        c.benchmark_group("remove_all")
+            .sample_size(10)
+            .bench_function(name, |b| {
+                b.iter_batched(
+                    || w.keys.iter().collect::<$ty>(),
+                    |mut trie| {
+                        for key in w.hits.iter() {
+                            trie.remove(key);
+                        }
+                        trie
+                    },
+                    BatchSize::LargeInput,
+                )
+            });
+    }};
 }
 
 fn bench_btree(c: &mut Criterion, w: &Workload) {
@@ -159,8 +165,10 @@ fn benches(c: &mut Criterion) {
     let n = std::env::var("ZFAST_N").map_or(1_000_000, |s| s.parse().expect("ZFAST_N"));
     let spec = std::env::var("ZFAST_KEYS").unwrap_or("urls".into());
     let w = Workload::new(&spec, n);
-    bench_trie::<zfast::utils::Xxh3>(c, "ZFastTrie", &w);
-    bench_trie::<Chain>(c, "ZFastTrie<Chain>", &w);
+    bench!(ZFastSet, c, "ZFastSet", &w);
+    bench!(ZFastSet<Chain>, c, "ZFastSet<Chain>", &w);
+    bench!(ZFastTrie, c, "ZFastTrie", &w);
+    bench!(ZFastTrie<Chain>, c, "ZFastTrie<Chain>", &w);
     bench_btree(c, &w);
 }
 
