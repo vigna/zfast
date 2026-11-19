@@ -1,7 +1,7 @@
 /*
  * SPDX-FileCopyrightText: 2026 Sebastiano Vigna
  *
- * SPDX-License-Identifier: Apache-2.0 OR LGPL-2.1-or-later
+ * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
 mod common;
@@ -11,11 +11,11 @@ use common::*;
 use sux::dict::SliceSeq;
 use sux::traits::{IndexedDict, IndexedSeq, Pred, Succ};
 use zfast::utils::{Chain, HashPrefixes, Xxh3};
-use zfast::{BuildError, KeySeq, PackedKeys, StaticZFastTrie};
+use zfast::{BuildError, Dirs, KeySeq, PackedKeys, Slot, StaticZFastTrie};
 
 /// Checks all queries on `x` against a naive implementation.
-fn check_query<K: KeySeq, H: HashPrefixes>(
-    trie: &StaticZFastTrie<K, H>,
+fn check_query<K: KeySeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs>(
+    trie: &StaticZFastTrie<K, H, S, D>,
     keys: &[Vec<u8>],
     x: &[u8],
 ) {
@@ -60,14 +60,21 @@ fn check<H: HashPrefixes>(sig_bits: u32, sizes: &[usize], queries: usize) -> Res
             let keys = gen_set(&mut rng, shape, n);
             let packed: PackedKeys = keys.iter().collect();
             let trie = <StaticZFastTrie<_, H>>::with_sig_bits(packed, sig_bits)?;
+            // The same structure with directories based on Elias-Fano
+            let ef = trie.clone().into_ef();
             assert_eq!(trie.len(), keys.len());
+            assert_eq!(ef.len(), keys.len());
             for (i, key) in keys.iter().enumerate() {
                 assert_eq!(trie.key(i), key);
                 check_query(&trie, &keys, key);
+                check_query(&ef, &keys, key);
             }
             check_query(&trie, &keys, &[]);
+            check_query(&ef, &keys, &[]);
             for _ in 0..queries {
-                check_query(&trie, &keys, &gen_query(&mut rng, shape, &keys));
+                let query = gen_query(&mut rng, shape, &keys);
+                check_query(&trie, &keys, &query);
+                check_query(&ef, &keys, &query);
             }
         }
     }
@@ -179,5 +186,81 @@ fn test_sux_traits() -> Result<()> {
     assert_eq!(trie.into_inner().len(), 4);
     let trie = <StaticZFastTrie<_>>::new(PackedKeys::new())?;
     assert!(trie.is_empty());
+    Ok(())
+}
+
+#[test]
+fn test_backends() -> Result<()> {
+    use sux::dict::{EfSeq, EliasFanoBuilder, RearCodedListBuilder};
+
+    let mut rng = rng(1);
+    let keys = gen_set(&mut rng, Shape::Clustered, 2000);
+
+    // Offsets of the keys in an Elias-Fano representation
+    let packed: PackedKeys = keys.iter().collect();
+    let packed = unsafe {
+        packed.map_offsets(|offsets| -> EfSeq {
+            let mut builder = EliasFanoBuilder::new(offsets.len(), *offsets.last().unwrap());
+            for &offset in offsets.iter() {
+                builder.push(offset);
+            }
+            builder.build_with_seq()
+        })
+    };
+    let trie = <StaticZFastTrie<_>>::new(packed)?.into_ef();
+
+    // A rear-coded list from sux
+    let mut builder = <RearCodedListBuilder<[u8], true>>::new(4);
+    for key in &keys {
+        builder.push(key.as_slice());
+    }
+    let rcl = <StaticZFastTrie<_>>::new(builder.build())?;
+
+    for _ in 0..5000 {
+        let query = gen_query(&mut rng, Shape::Clustered, &keys);
+        check_query(&trie, &keys, &query);
+        check_query(&rcl, &keys, &query);
+    }
+    Ok(())
+}
+
+#[cfg(feature = "epserde")]
+#[test]
+fn test_epserde() -> Result<()> {
+    use epserde::deser::Deserialize;
+    use epserde::prelude::Aligned16;
+    use epserde::ser::Serialize;
+    use epserde::utils::AlignedCursor;
+
+    let mut rng = rng(2);
+    let keys = gen_set(&mut rng, Shape::Clustered, 2000);
+    let packed: PackedKeys = keys.iter().collect();
+    let trie = <StaticZFastTrie<_>>::new(packed)?;
+
+    // The structure with the default backends
+    let mut cursor = <AlignedCursor<Aligned16>>::new();
+    unsafe { trie.serialize(&mut cursor)? };
+    let len = cursor.len();
+    cursor.set_position(0);
+    let eps = unsafe { <StaticZFastTrie<PackedKeys>>::read_mem(&mut cursor, len)? };
+    let eps = eps.uncase();
+    assert_eq!(eps.len(), keys.len());
+    for _ in 0..5000 {
+        check_query(eps, &keys, &gen_query(&mut rng, Shape::Clustered, &keys));
+    }
+
+    // The structure with directories based on Elias-Fano
+    let ef = trie.into_ef();
+    let mut cursor = <AlignedCursor<Aligned16>>::new();
+    unsafe { ef.serialize(&mut cursor)? };
+    let len = cursor.len();
+    cursor.set_position(0);
+    let eps = unsafe {
+        <StaticZFastTrie<PackedKeys, Xxh3, Box<[Slot]>, zfast::EfDirs>>::read_mem(&mut cursor, len)?
+    };
+    let eps = eps.uncase();
+    for _ in 0..5000 {
+        check_query(eps, &keys, &gen_query(&mut rng, Shape::Clustered, &keys));
+    }
     Ok(())
 }

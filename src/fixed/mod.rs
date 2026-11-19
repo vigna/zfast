@@ -1,13 +1,17 @@
 /*
  * SPDX-FileCopyrightText: 2026 Sebastiano Vigna
  *
- * SPDX-License-Identifier: Apache-2.0 OR LGPL-2.1-or-later
+ * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
 //! A static z-fast trie on a sorted sequence of byte strings.
 
+mod dirs;
+pub use dirs::{DirNode, Dirs, EfDirs, PackedDirs, PackedNode, SeqDirs, SeqNode};
+
 use crate::keys::KeySeq;
 use crate::utils::{HashPrefixes, Xxh3, fat_binary_search, lcp, prefetch, two_fattest};
+use dirs::PackedDirsBuilder;
 use mem_dbg::{MemDbg, MemSize};
 use std::borrow::Borrow;
 use std::fmt;
@@ -20,21 +24,31 @@ const EMPTY: u32 = u32::MAX;
 /// The default seed.
 const SEED: u64 = 0x05EE_D0F2_FA57;
 
-/// A slot of the z-map: it is self-contained, in the sense that fat binary
-/// search never needs to access anything else.
+/// A slot of the z-map of a [`StaticZFastTrie`].
+///
+/// A slot is self-contained, in the sense that fat binary search never
+/// needs to access anything else.
 #[derive(Clone, Copy, Debug, MemSize, MemDbg)]
 #[mem_size(flat)]
 #[repr(C)]
-struct Slot {
+#[cfg_attr(feature = "epserde", derive(epserde::Epserde), epserde(zero_copy))]
+pub struct Slot {
     /// The signature of the handle.
     sig: u32,
     /// The length of the handle.
     handle: u32,
     /// The length of the extent.
     extent: u32,
-    /// The offset of the directory of the node, or [`EMPTY`].
+    /// The identifier of the node, or [`EMPTY`].
     off: u32,
 }
+
+const EMPTY_SLOT: Slot = Slot {
+    sig: 0,
+    handle: 0,
+    extent: 0,
+    off: EMPTY,
+};
 
 /// The errors that can happen when building a [`StaticZFastTrie`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,12 +100,28 @@ impl std::error::Error for BuildError {}
 /// and completes the query. In the very unlikely case the verification fails,
 /// the query is answered by a standard binary search.
 ///
-/// The structure uses about 20 bytes per key, depending on the shape of the
-/// trie, besides the space used by the keys.
+/// # Type parameters and space
 ///
 /// The type parameter `K` is the type of the [sequence of keys](KeySeq): any
-/// [`IndexedSeq`] whose output can be seen as a slice of bytes will do. The
-/// type parameter `H` is the [strategy used to hash prefixes](HashPrefixes).
+/// [`IndexedSeq`] whose output can be seen as a slice of bytes will do, but
+/// the uncompressed [`PackedKeys`] gives the fastest queries. The type
+/// parameter `H` is the [strategy used to hash prefixes](HashPrefixes).
+///
+/// The remaining two parameters are the backends containing the bulk of the
+/// data. The type parameter `S` is the backend of the z-map, which must be
+/// viewable as a slice of [slots](Slot). The type parameter `D` is the type of
+/// the [directories](Dirs) of the nodes: instances are built with
+/// [`PackedDirs`], which give the fastest queries. The method
+/// [`into_ef`](Self::into_ef) replaces the directories with [`EfDirs`], which
+/// are based on the Elias–Fano representation of [`sux`]: they use much less
+/// space, but queries are slower. With [`map_dirs`](Self::map_dirs) one can
+/// use [`SeqDirs`] with arbitrary backends (e.g., Elias–Fano with a different
+/// selection structure).
+///
+/// Since all the large components are type parameters, when the structure is
+/// deserialized using ε-serde (feature `epserde`) they are replaced by
+/// references into the serialized data: for example, a memory-mapped
+/// structure is immediately usable.
 ///
 /// Besides the inherent methods, which accept anything that can be seen as a
 /// slice of bytes, this structure implements the [`IndexedSeq`],
@@ -111,22 +141,23 @@ impl std::error::Error for BuildError {}
 /// assert_eq!(trie.pred("c"), Some((1, "baz".as_bytes())));
 /// assert_eq!(trie.prefix_range("ba"), 0..2);
 /// assert_eq!(trie.prefix_range("foo"), 2..4);
+///
+/// // A more compact, but slower, representation
+/// let trie = trie.into_ef();
+/// assert_eq!(trie.index_of("baz"), Some(1));
 /// # Ok::<(), zfast::BuildError>(())
 /// ```
-#[derive(Debug, Clone, MemSize, MemDbg)]
-pub struct StaticZFastTrie<K, H = Xxh3> {
+///
+/// [`PackedKeys`]: crate::PackedKeys
+#[derive(Debug, MemSize, MemDbg)]
+#[cfg_attr(feature = "epserde", derive(epserde::Epserde), epserde(phantom(H)))]
+pub struct StaticZFastTrie<K, H = Xxh3, S = Box<[Slot]>, D = PackedDirs> {
     /// The keys.
     keys: K,
     /// The z-map: an open-addressing table with linear probing.
-    slots: Box<[Slot]>,
-    /// The directories of the internal nodes. The directory of a node with
-    /// *k* children is formed by a header (*k* − 2 in the lower 8 bits, and
-    /// then a bit that is set if the first child is the leaf of a key equal
-    /// to the extent of the node), followed by the ranks at which each child
-    /// starts, followed by the rank at which the node ends, followed by the
-    /// bytes associated with the children (except for the first one, if the
-    /// bit above is set).
-    dirs: Box<[u8]>,
+    slots: S,
+    /// The directories of the internal nodes.
+    dirs: D,
     /// The root, or an empty slot if there are fewer than two keys.
     root: Slot,
     /// The extent of the root.
@@ -142,52 +173,42 @@ pub struct StaticZFastTrie<K, H = Xxh3> {
     _marker: PhantomData<H>,
 }
 
+// Clone is implemented by hand, as a derived implementation would require H
+// to implement Clone
+impl<K: Clone, H, S: Clone, D: Clone> Clone for StaticZFastTrie<K, H, S, D> {
+    fn clone(&self) -> Self {
+        Self {
+            keys: self.keys.clone(),
+            slots: self.slots.clone(),
+            dirs: self.dirs.clone(),
+            root: self.root,
+            root_extent: self.root_extent.clone(),
+            max_extent: self.max_extent,
+            num_nodes: self.num_nodes,
+            seed: self.seed,
+            sig_mask: self.sig_mask,
+            _marker: PhantomData,
+        }
+    }
+}
+
 /// The result of a query: the number of keys smaller than the query, whether
 /// the query is a key, and the interval of ranks of the keys that have the
 /// query as a prefix.
 type Located = (usize, bool, Range<usize>);
 
-/// A decoded directory.
-#[derive(Clone, Copy)]
-struct Dir<'a> {
-    /// The ranks at which each child starts, followed by the rank at which
-    /// the node ends, as little-endian 32-bit integers.
-    starts: &'a [u8],
-    /// The bytes associated with the children.
-    syms: &'a [u8],
-    /// Whether the first child is the leaf of a key equal to the extent.
-    has_end: bool,
-}
-
-impl Dir<'_> {
-    #[inline(always)]
-    fn start(&self, i: usize) -> usize {
-        u32::from_le_bytes(self.starts[4 * i..4 * i + 4].try_into().unwrap()) as usize
-    }
-
-    /// The first rank of the node.
-    #[inline(always)]
-    fn left(&self) -> usize {
-        self.start(0)
-    }
-
-    /// The first rank after the node.
-    #[inline(always)]
-    fn right(&self) -> usize {
-        self.start(self.starts.len() / 4 - 1)
-    }
-
-    /// Returns the index of the child associated with the byte `c`, if there
-    /// is one, or otherwise the index of the first child associated with a
-    /// larger byte, and whether the child was found.
-    #[inline(always)]
-    fn child(&self, c: u8) -> (usize, bool) {
-        let j = self.syms.iter().filter(|&&s| s < c).count();
-        (
-            self.has_end as usize + j,
-            j < self.syms.len() && self.syms[j] == c,
-        )
-    }
+/// Returns the position in a table of given capacity at which the probing
+/// sequence of a hash starts.
+#[inline(always)]
+fn home(h: u64, sig_mask: u32, capacity: usize) -> usize {
+    // When testing with short signatures we want long clusters with many
+    // repeated signatures.
+    let h = if sig_mask == u32::MAX {
+        h >> 32
+    } else {
+        h & sig_mask as u64
+    };
+    ((h * capacity as u64) >> 32) as usize
 }
 
 impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
@@ -245,15 +266,10 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
             return Err(BuildError::TooLarge);
         }
         let seed = SEED;
-        let mut dirs = Vec::<u8>::new();
+        let mut dirs = PackedDirsBuilder::default();
         let mut entries = Vec::<(u64, Slot)>::new();
         let mut root_extent = Box::<[u8]>::default();
-        let mut root = Slot {
-            sig: 0,
-            handle: 0,
-            extent: 0,
-            off: EMPTY,
-        };
+        let mut root = EMPTY_SLOT;
         let mut max_extent = 0;
 
         // An open node: the length of its extent, its first rank, and the
@@ -290,23 +306,14 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
                 left = node.left;
                 // The extent of the parent of the node, if any
                 let parent = stack.last().map(|top| top.extent).max(cur);
-                let off = dirs.len();
+                let Some(off) = dirs.push(&node.starts, i, node.extent, &keys) else {
+                    return Err(BuildError::TooLarge);
+                };
                 if off >= EMPTY as usize {
                     return Err(BuildError::TooLarge);
                 }
-                let k = node.starts.len();
-                debug_assert!((2..=257).contains(&k));
                 let first = keys.key(node.left);
                 let first = first.as_ref();
-                let has_end = first.len() == node.extent;
-                dirs.extend_from_slice(&((k - 2) as u32 | (has_end as u32) << 8).to_le_bytes());
-                for &s in &node.starts {
-                    dirs.extend_from_slice(&s.to_le_bytes());
-                }
-                dirs.extend_from_slice(&(i as u32).to_le_bytes());
-                for &s in &node.starts[has_end as usize..] {
-                    dirs.push(keys.key(s as usize).as_ref()[node.extent]);
-                }
                 max_extent = max_extent.max(node.extent);
                 match parent {
                     None => {
@@ -359,18 +366,9 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
         if capacity >= EMPTY as usize {
             return Err(BuildError::TooLarge);
         }
-        let mut slots = vec![
-            Slot {
-                sig: 0,
-                handle: 0,
-                extent: 0,
-                off: EMPTY
-            };
-            capacity
-        ]
-        .into_boxed_slice();
+        let mut slots = vec![EMPTY_SLOT; capacity].into_boxed_slice();
         for (h, entry) in entries {
-            let mut pos = Self::home(h, sig_mask, capacity);
+            let mut pos = home(h, sig_mask, capacity);
             while slots[pos].off != EMPTY {
                 pos += 1;
                 if pos == capacity {
@@ -382,7 +380,7 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
         Ok(Self {
             keys,
             slots,
-            dirs: dirs.into_boxed_slice(),
+            dirs: dirs.build(),
             root,
             root_extent,
             max_extent,
@@ -393,44 +391,87 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
         })
     }
 
-    /// Returns the position in a table of given capacity at which the
-    /// probing sequence of a hash starts.
-    #[inline(always)]
-    fn home(h: u64, sig_mask: u32, capacity: usize) -> usize {
-        // When testing with short signatures we want long clusters with
-        // many repeated signatures.
-        let h = if sig_mask == u32::MAX {
-            h >> 32
-        } else {
-            h & sig_mask as u64
-        };
-        ((h * capacity as u64) >> 32) as usize
+    /// Replaces the directories with their [Elias–Fano-based
+    /// representation](EfDirs), which uses much less space, but is slower.
+    pub fn into_ef(self) -> StaticZFastTrie<K, H, Box<[Slot]>, EfDirs> {
+        let (dirs, ids) = SeqDirs::from_packed(&self.dirs);
+        let dirs = dirs.into_ef();
+        // SAFETY: the new identifier of a node is the index of the old one
+        unsafe {
+            self.map_dirs(
+                |_| dirs,
+                |id| ids.binary_search(&id).expect("unknown node identifier"),
+            )
+        }
     }
+}
 
-    #[inline(always)]
-    fn dir(&self, off: u32) -> Dir<'_> {
-        let off = off as usize;
-        let header = u32::from_le_bytes(self.dirs[off..off + 4].try_into().unwrap());
-        let k = (header & 0xFF) as usize + 2;
-        let has_end = header & 0x100 != 0;
-        let starts = off + 4;
-        let syms = starts + 4 * (k + 1);
-        Dir {
-            starts: &self.dirs[starts..syms],
-            syms: &self.dirs[syms..syms + k - has_end as usize],
-            has_end,
+impl<K, H, S, D> StaticZFastTrie<K, H, S, D> {
+    /// Replaces the directories, and the identifiers of the nodes in the
+    /// z-map.
+    ///
+    /// # Safety
+    ///
+    /// The directory of the node with identifier `id(x)` in the new
+    /// directories must be the same as the directory of the node with
+    /// identifier `x` in the old ones.
+    pub unsafe fn map_dirs<D2>(
+        self,
+        dirs: impl FnOnce(D) -> D2,
+        id: impl Fn(usize) -> usize,
+    ) -> StaticZFastTrie<K, H, Box<[Slot]>, D2>
+    where
+        S: AsRef<[Slot]>,
+    {
+        let mut slots: Box<[Slot]> = self.slots.as_ref().into();
+        let mut root = self.root;
+        for slot in slots.iter_mut().chain(std::iter::once(&mut root)) {
+            if slot.off != EMPTY {
+                slot.off = id(slot.off as usize) as u32;
+            }
+        }
+        StaticZFastTrie {
+            keys: self.keys,
+            slots,
+            dirs: dirs(self.dirs),
+            root,
+            root_extent: self.root_extent,
+            max_extent: self.max_extent,
+            num_nodes: self.num_nodes,
+            seed: self.seed,
+            sig_mask: self.sig_mask,
+            _marker: PhantomData,
         }
     }
 
+    /// Returns a reference to the underlying sequence of keys.
+    #[inline(always)]
+    pub fn keys(&self) -> &K {
+        &self.keys
+    }
+
+    /// Consumes the structure and returns the underlying sequence of keys.
+    pub fn into_inner(self) -> K {
+        self.keys
+    }
+
+    /// Returns the number of internal nodes of the trie.
+    pub fn num_nodes(&self) -> usize {
+        self.num_nodes
+    }
+}
+
+impl<K: KeySeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> StaticZFastTrie<K, H, S, D> {
     /// Returns the slot associated with a handle of length `f` and hash `h`,
     /// if any.
     #[inline(always)]
     fn find(&self, h: u64, f: usize) -> Option<Slot> {
         let sig = h as u32 & self.sig_mask;
-        let capacity = self.slots.len();
-        let mut pos = Self::home(h, self.sig_mask, capacity);
+        let slots = self.slots.as_ref();
+        let capacity = slots.len();
+        let mut pos = home(h, self.sig_mask, capacity);
         loop {
-            let slot = self.slots[pos];
+            let slot = slots[pos];
             if slot.off == EMPTY {
                 return None;
             }
@@ -457,17 +498,18 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
         let b = x.len().min(self.max_extent);
         if a < b {
             let hasher = H::hasher(x, b, self.seed);
-            let capacity = self.slots.len();
+            let slots = self.slots.as_ref();
+            let capacity = slots.len();
             fat_binary_search(
                 &hasher,
                 a,
                 b,
                 |h| {
-                    prefetch(self.slots.as_ptr().wrapping_add(Self::home(
-                        h,
-                        self.sig_mask,
-                        capacity,
-                    )))
+                    prefetch(
+                        slots
+                            .as_ptr()
+                            .wrapping_add(home(h, self.sig_mask, capacity)),
+                    )
                 },
                 |f, h| {
                     self.find(h, f).map(|slot| {
@@ -497,24 +539,25 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
         }
         let top = self.fat_binary_search(x);
         let (extent, handle) = (top.extent as usize, top.handle as usize);
-        let dir = self.dir(top.off);
+        let node = self.dirs.node(top.off as usize);
 
-        let range = if extent < x.len() {
+        let (range, key) = if extent < x.len() {
             // We guess that top is the parent of the exit node, and thus
             // that the exit node is one of its children
-            let (i, found) = dir.child(x[extent]);
+            let (i, found) = node.child(x[extent]);
             if found {
-                dir.start(i)..dir.start(i + 1)
+                (node.start(i)..node.start(i + 1), node.key(&self.keys, i))
             } else {
                 // If we guessed right, x exits at top between two children
-                let key = self.keys.key(dir.left());
+                let key = node.key(&self.keys, 0);
                 let key = key.as_ref();
                 let l = lcp(x, key);
                 return if l >= extent {
-                    (dir.start(i), false, dir.start(i)..dir.start(i))
+                    let rank = node.start(i);
+                    (rank, false, rank..rank)
                 } else if l >= handle {
                     // top is the exit node
-                    Self::exit(x, key, l, dir.left()..dir.right())
+                    Self::exit(x, key, l, node.left()..node.right())
                 } else {
                     self.locate_slow(x)
                 };
@@ -522,12 +565,11 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
         } else {
             // Either x is the extent of top, or top can only be the exit
             // node
-            dir.left()..dir.right()
+            (node.left()..node.right(), node.key(&self.keys, 0))
         };
 
-        // In all cases, the first key of the range starts with the extent
-        // of top
-        let key = self.keys.key(range.start);
+        // In all cases, the key is the first key of the range, and it starts
+        // with the extent of top
         let key = key.as_ref();
         let l = lcp(x, key);
         if l >= extent {
@@ -542,7 +584,7 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
             Self::exit(x, key, l, range)
         } else if l >= handle {
             // top is the exit node
-            Self::exit(x, key, l, dir.left()..dir.right())
+            Self::exit(x, key, l, node.left()..node.right())
         } else {
             // A false positive misled the search
             self.locate_slow(x)
@@ -621,17 +663,6 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
         self.keys.key(rank)
     }
 
-    /// Returns a reference to the underlying sequence of keys.
-    #[inline(always)]
-    pub fn keys(&self) -> &K {
-        &self.keys
-    }
-
-    /// Consumes the structure and returns the underlying sequence of keys.
-    pub fn into_inner(self) -> K {
-        self.keys
-    }
-
     /// Returns the number of keys smaller than `x`.
     #[inline]
     pub fn rank(&self, x: impl AsRef<[u8]>) -> usize {
@@ -694,11 +725,6 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
         self.locate(x.as_ref()).2
     }
 
-    /// Returns the number of internal nodes of the trie.
-    pub fn num_nodes(&self) -> usize {
-        self.num_nodes
-    }
-
     /// Returns the number of probes of the z-map, the number of slots
     /// examined, and the number of successful probes of a fat binary search
     /// for `x`.
@@ -713,15 +739,16 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
         }
         let mut a = self.root.extent as usize;
         let mut b = x.len().min(self.max_extent);
-        let capacity = self.slots.len();
+        let slots = self.slots.as_ref();
+        let capacity = slots.len();
         while a < b {
             let f = two_fattest(a, b);
             let h = H::hash_prefix(x, f, self.seed);
             let sig = h as u32 & self.sig_mask;
-            let mut pos = Self::home(h, self.sig_mask, capacity);
+            let mut pos = home(h, self.sig_mask, capacity);
             probes += 1;
             let found = loop {
-                let slot = self.slots[pos];
+                let slot = slots[pos];
                 scanned += 1;
                 if slot.off == EMPTY {
                     break None;
@@ -744,18 +771,11 @@ impl<K: KeySeq, H: HashPrefixes> StaticZFastTrie<K, H> {
         }
         (probes, scanned, hits)
     }
-
-    /// Returns the number of bytes occupied by this structure, not including
-    /// the keys.
-    pub fn index_mem_size(&self) -> usize {
-        size_of::<Self>() - size_of::<K>()
-            + size_of_val(&*self.slots)
-            + self.dirs.len()
-            + self.root_extent.len()
-    }
 }
 
-impl<K: KeySeq, H: HashPrefixes> PartialEq for StaticZFastTrie<K, H> {
+impl<K: KeySeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> PartialEq
+    for StaticZFastTrie<K, H, S, D>
+{
     /// Two static z-fast tries are equal if they contain the same keys.
     fn eq(&self, other: &Self) -> bool {
         self.len() == other.len()
@@ -763,16 +783,16 @@ impl<K: KeySeq, H: HashPrefixes> PartialEq for StaticZFastTrie<K, H> {
     }
 }
 
-impl<K: KeySeq, H: HashPrefixes> Eq for StaticZFastTrie<K, H> {}
+impl<K: KeySeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> Eq for StaticZFastTrie<K, H, S, D> {}
 
 // Traits from sux
 
-impl<K: Types, H> Types for StaticZFastTrie<K, H> {
+impl<K: Types, H, S, D> Types for StaticZFastTrie<K, H, S, D> {
     type Input = K::Input;
     type Output<'a> = K::Output<'a>;
 }
 
-impl<K: IndexedSeq, H> IndexedSeq for StaticZFastTrie<K, H> {
+impl<K: IndexedSeq, H, S, D> IndexedSeq for StaticZFastTrie<K, H, S, D> {
     #[inline(always)]
     unsafe fn get_unchecked(&self, index: usize) -> Self::Output<'_> {
         unsafe { self.keys.get_unchecked(index) }
@@ -784,7 +804,8 @@ impl<K: IndexedSeq, H> IndexedSeq for StaticZFastTrie<K, H> {
     }
 }
 
-impl<K: IndexedSeq, H: HashPrefixes> IndexedDict for StaticZFastTrie<K, H>
+impl<K: IndexedSeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> IndexedDict
+    for StaticZFastTrie<K, H, S, D>
 where
     K::Input: AsRef<[u8]>,
     for<'a> K::Output<'a>: AsRef<[u8]>,
@@ -796,7 +817,8 @@ where
     }
 }
 
-impl<K: IndexedSeq, H: HashPrefixes> SuccUnchecked for StaticZFastTrie<K, H>
+impl<K: IndexedSeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> SuccUnchecked
+    for StaticZFastTrie<K, H, S, D>
 where
     K::Input: AsRef<[u8]> + for<'a> PartialOrd<K::Output<'a>> + PartialOrd,
     for<'a> K::Output<'a>: AsRef<[u8]> + PartialOrd<K::Input> + PartialOrd,
@@ -812,7 +834,7 @@ where
     }
 }
 
-impl<K: IndexedSeq, H: HashPrefixes> Succ for StaticZFastTrie<K, H>
+impl<K: IndexedSeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> Succ for StaticZFastTrie<K, H, S, D>
 where
     K::Input: AsRef<[u8]> + for<'a> PartialOrd<K::Output<'a>> + PartialOrd,
     for<'a> K::Output<'a>: AsRef<[u8]> + PartialOrd<K::Input> + PartialOrd,
@@ -828,7 +850,8 @@ where
     }
 }
 
-impl<K: IndexedSeq, H: HashPrefixes> PredUnchecked for StaticZFastTrie<K, H>
+impl<K: IndexedSeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> PredUnchecked
+    for StaticZFastTrie<K, H, S, D>
 where
     K::Input: AsRef<[u8]> + for<'a> PartialOrd<K::Output<'a>> + PartialOrd,
     for<'a> K::Output<'a>: AsRef<[u8]> + PartialOrd<K::Input> + PartialOrd,
@@ -849,7 +872,7 @@ where
     }
 }
 
-impl<K: IndexedSeq, H: HashPrefixes> Pred for StaticZFastTrie<K, H>
+impl<K: IndexedSeq, H: HashPrefixes, S: AsRef<[Slot]>, D: Dirs> Pred for StaticZFastTrie<K, H, S, D>
 where
     K::Input: AsRef<[u8]> + for<'a> PartialOrd<K::Output<'a>> + PartialOrd,
     for<'a> K::Output<'a>: AsRef<[u8]> + PartialOrd<K::Input> + PartialOrd,

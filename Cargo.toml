@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 description = "Dynamic and static z-fast tries on byte strings"
 authors = ["Sebastiano Vigna <sebastiano.vigna@unimi.it>"]
-license = "Apache-2.0 OR LGPL-2.1-or-later"
+license = "Apache-2.0 OR MIT"
 publish = false
 exclude = ["paper/", "aws.sh"]
 
@@ -13,13 +13,17 @@ exclude = ["paper/", "aws.sh"]
 sux = { version = "0.15.4", default-features = false }
 mem_dbg = "0.4.1"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+epserde = { version = "0.13.2", optional = true, default-features = false, features = ["std", "derive"] }
 
 [dev-dependencies]
 anyhow = "1.0"
 rand = { version = "0.10.1", default-features = false, features = ["std", "std_rng"] }
+epserde = { version = "0.13.2", default-features = false, features = ["std", "derive"] }
 criterion = { version = "0.7.0", default-features = false, features = ["cargo_bench_support"] }
 
 [features]
+# Support for ε-serde serialization of the static structures.
+epserde = ["dep:epserde", "sux/epserde"]
 # Enables very slow tests.
 slow_tests = []
 

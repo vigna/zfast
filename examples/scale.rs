@@ -1,7 +1,7 @@
 /*
  * SPDX-FileCopyrightText: 2026 Sebastiano Vigna
  *
- * SPDX-License-Identifier: Apache-2.0 OR LGPL-2.1-or-later
+ * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
 //! A plain timing harness for large-scale experiments.
@@ -21,6 +21,7 @@
 //! nanoseconds per operation; the last column of the first line of each
 //! structure is the space in bytes per key (including the keys).
 
+use mem_dbg::{MemSize, SizeFlags};
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
 use rand::{RngExt, SeedableRng};
@@ -290,12 +291,12 @@ fn bench_static<H: HashPrefixes>(
     reps: usize,
 ) {
     let packed = sorted(ins);
-    let key_bytes = packed.num_bytes() + 8 * packed.len();
+    let key_bytes = packed.mem_size(SizeFlags::default());
     let start = Instant::now();
     let trie = <StaticZFastTrie<_, H>>::new(packed).unwrap();
     let extra = format!(
         "{:.1} B/key index + {:.1} B/key keys, {:.3} nodes/key",
-        trie.index_mem_size() as f64 / ins.len() as f64,
+        (trie.mem_size(SizeFlags::default()) - key_bytes) as f64 / ins.len() as f64,
         key_bytes as f64 / ins.len() as f64,
         trie.num_nodes() as f64 / ins.len() as f64
     );
@@ -328,6 +329,17 @@ fn bench_static<H: HashPrefixes>(
         time(misses, reps, |k| trie.succ(k).map_or(0, |p| p.1.len())),
         "",
     );
+
+    // The same structure with directories based on Elias-Fano
+    let trie = trie.into_ef();
+    let name = &format!("{name}-ef");
+    let extra = format!(
+        "{:.1} B/key index",
+        (trie.mem_size(SizeFlags::default()) - key_bytes) as f64 / ins.len() as f64,
+    );
+    let t = time(hits, reps, |k| trie.index_of(k).unwrap_or(0));
+    report(name, "index_of-hit", t, &extra);
+    report(name, "rank-miss", time(misses, reps, |k| trie.rank(k)), "");
 }
 
 fn bench_bsearch(ins: &PackedKeys, hits: &PackedKeys, misses: &PackedKeys, reps: usize) {

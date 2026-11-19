@@ -1,13 +1,13 @@
 /*
  * SPDX-FileCopyrightText: 2026 Sebastiano Vigna
  *
- * SPDX-License-Identifier: Apache-2.0 OR LGPL-2.1-or-later
+ * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
 //! Random-access sequences of byte strings.
 
 use mem_dbg::{MemDbg, MemSize};
-use sux::traits::IndexedSeq;
+use sux::traits::{IndexedSeq, Types};
 
 /// A random-access sequence of byte strings.
 ///
@@ -17,6 +17,12 @@ use sux::traits::IndexedSeq;
 /// the [`SliceSeq`] of [`sux`]), and by the uncompressed, pointerless
 /// [`PackedKeys`]; one can also implement it, for example, for the suffixes of
 /// a text in the order given by a suffix array.
+///
+/// Besides access by index, the trait provides access by *position*: a
+/// position is an opaque value that can be obtained from an index using
+/// [`pos`](KeySeq::pos), and that makes it possible to retrieve a key, using
+/// [`key_at`](KeySeq::key_at), possibly faster than its index. Indices
+/// themselves are the default positions.
 ///
 /// [`StaticZFastTrie`]: crate::StaticZFastTrie
 /// [rear-coded lists]: sux::dict::RearCodedList
@@ -41,6 +47,26 @@ pub trait KeySeq {
     /// May panic if the index is not smaller than
     /// [`num_keys`](KeySeq::num_keys).
     fn key(&self, index: usize) -> Self::Key<'_>;
+
+    /// Returns the position of the key of given index.
+    ///
+    /// Positions must be smaller than 2⁴⁰.
+    ///
+    /// # Panics
+    ///
+    /// May panic if the index is not smaller than
+    /// [`num_keys`](KeySeq::num_keys).
+    #[inline(always)]
+    fn pos(&self, index: usize) -> usize {
+        index
+    }
+
+    /// Returns the key at the given position, which must have been returned
+    /// by [`pos`](KeySeq::pos).
+    #[inline(always)]
+    fn key_at(&self, pos: usize) -> Self::Key<'_> {
+        self.key(pos)
+    }
 }
 
 impl<S: IndexedSeq + ?Sized> KeySeq for S
@@ -63,12 +89,26 @@ where
     }
 }
 
+/// The number of bytes used to store the length of a key.
+const LEN_BYTES: usize = 4;
+
 /// A sequence of byte strings stored contiguously.
 ///
-/// The keys are concatenated in a single allocation, and a second allocation
-/// contains the position at which each key ends. Besides using less space than
-/// a vector of vectors, this representation needs no pointer chasing: a key is
-/// retrieved by reading two adjacent positions and then the bytes.
+/// Each key is stored, preceded by its length, in a single sequence of bytes;
+/// a second sequence contains the position at which each key starts. Besides
+/// using less space than a vector of vectors, this representation needs no
+/// pointer chasing: a key is retrieved by reading its position and then its
+/// bytes, and a key whose [position](KeySeq::pos) is known is retrieved
+/// directly.
+///
+/// The type parameters `B` and `O` are the backends for the bytes and for the
+/// positions, respectively: the first one must be viewable as a slice of bytes,
+/// and the second one must be an [`IndexedSeq`] returning `usize`, which
+/// includes vectors, boxed slices, and slices, but also, for example, an
+/// [Elias–Fano representation]. Instances are built with [boxed
+/// slices](PackedKeys::from_iter) or [vectors](PackedKeys::push) as backends;
+/// when the structure is deserialized using ε-serde, the backends are
+/// replaced by references to slices.
 ///
 /// # Examples
 ///
@@ -83,27 +123,93 @@ where
 /// let keys = SliceSeq::from(["a", "ab", "b"]);
 /// assert_eq!(KeySeq::key(&keys, 1), "ab");
 /// ```
-#[derive(Debug, Clone, Default, PartialEq, Eq, MemSize, MemDbg)]
-pub struct PackedKeys {
-    bytes: Vec<u8>,
-    /// `ends[i]` is the position at which key `i - 1` ends, and `ends[0]` is
-    /// zero.
-    ends: Vec<usize>,
+///
+/// [Elias–Fano representation]: sux::dict::EliasFano
+#[derive(Debug, Clone, PartialEq, Eq, MemSize, MemDbg)]
+#[cfg_attr(feature = "epserde", derive(epserde::Epserde))]
+pub struct PackedKeys<B = Box<[u8]>, O = Box<[usize]>> {
+    /// The keys, each preceded by its length as a little-endian 32-bit
+    /// integer.
+    bytes: B,
+    /// The position in `bytes` of each key (i.e., of its length).
+    offsets: O,
 }
 
-impl PackedKeys {
-    /// Creates a new empty sequence.
+impl PackedKeys<Vec<u8>, Vec<usize>> {
+    /// Creates a new empty sequence with vectors as backends.
     pub fn new() -> Self {
         Self {
             bytes: Vec::new(),
-            ends: vec![0],
+            offsets: Vec::new(),
         }
     }
 
+    /// Appends a key.
+    ///
+    /// # Panics
+    ///
+    /// If the key is longer than `u32::MAX` bytes.
+    pub fn push(&mut self, key: impl AsRef<[u8]>) {
+        let key = key.as_ref();
+        let len = u32::try_from(key.len()).expect("key too long");
+        self.offsets.push(self.bytes.len());
+        self.bytes.extend_from_slice(&len.to_le_bytes());
+        self.bytes.extend_from_slice(key);
+    }
+
+    /// Converts the backends into boxed slices.
+    pub fn into_boxed(self) -> PackedKeys {
+        PackedKeys {
+            bytes: self.bytes.into_boxed_slice(),
+            offsets: self.offsets.into_boxed_slice(),
+        }
+    }
+}
+
+impl Default for PackedKeys<Vec<u8>, Vec<usize>> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for PackedKeys {
+    fn default() -> Self {
+        PackedKeys::new().into_boxed()
+    }
+}
+
+impl<B, O> PackedKeys<B, O> {
+    /// Replaces the backend of the positions.
+    ///
+    /// This method can be used, for example, to store the positions in an
+    /// [Elias–Fano representation].
+    ///
+    /// # Safety
+    ///
+    /// The new backend must return the same values as the old one.
+    ///
+    /// [Elias–Fano representation]: sux::dict::EliasFano
+    pub unsafe fn map_offsets<O2>(self, f: impl FnOnce(O) -> O2) -> PackedKeys<B, O2> {
+        PackedKeys {
+            bytes: self.bytes,
+            offsets: f(self.offsets),
+        }
+    }
+
+    /// Returns the backends.
+    pub fn into_raw_parts(self) -> (B, O) {
+        (self.bytes, self.offsets)
+    }
+}
+
+impl<B: AsRef<[u8]>, O: IndexedSeq> PackedKeys<B, O>
+where
+    for<'a> O: Types<Output<'a> = usize>,
+{
     /// Returns the number of keys.
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.ends.len().saturating_sub(1)
+        self.offsets.len()
     }
 
     /// Returns true if there are no keys.
@@ -112,24 +218,9 @@ impl PackedKeys {
         self.len() == 0
     }
 
-    /// Appends a key.
-    pub fn push(&mut self, key: impl AsRef<[u8]>) {
-        if self.ends.is_empty() {
-            self.ends.push(0);
-        }
-        self.bytes.extend_from_slice(key.as_ref());
-        self.ends.push(self.bytes.len());
-    }
-
-    /// Releases the memory that is not used.
-    pub fn shrink_to_fit(&mut self) {
-        self.bytes.shrink_to_fit();
-        self.ends.shrink_to_fit();
-    }
-
     /// Returns the overall number of bytes in the keys.
     pub fn num_bytes(&self) -> usize {
-        self.bytes.len()
+        self.bytes.as_ref().len() - LEN_BYTES * self.len()
     }
 
     /// Returns an iterator on the keys.
@@ -138,8 +229,14 @@ impl PackedKeys {
     }
 }
 
-impl KeySeq for PackedKeys {
-    type Key<'a> = &'a [u8];
+impl<B: AsRef<[u8]>, O: IndexedSeq> KeySeq for PackedKeys<B, O>
+where
+    for<'a> O: Types<Output<'a> = usize>,
+{
+    type Key<'a>
+        = &'a [u8]
+    where
+        Self: 'a;
 
     #[inline(always)]
     fn num_keys(&self) -> usize {
@@ -148,23 +245,41 @@ impl KeySeq for PackedKeys {
 
     #[inline(always)]
     fn key(&self, index: usize) -> &[u8] {
-        &self.bytes[self.ends[index]..self.ends[index + 1]]
+        self.key_at(self.offsets.get(index))
+    }
+
+    #[inline(always)]
+    fn pos(&self, index: usize) -> usize {
+        self.offsets.get(index)
+    }
+
+    #[inline(always)]
+    fn key_at(&self, pos: usize) -> &[u8] {
+        let bytes = self.bytes.as_ref();
+        let start = pos + LEN_BYTES;
+        let len = u32::from_le_bytes(bytes[pos..start].try_into().unwrap()) as usize;
+        &bytes[start..start + len]
     }
 }
 
-impl<B: AsRef<[u8]>> FromIterator<B> for PackedKeys {
-    fn from_iter<I: IntoIterator<Item = B>>(iter: I) -> Self {
+impl<A: AsRef<[u8]>> FromIterator<A> for PackedKeys<Vec<u8>, Vec<usize>> {
+    fn from_iter<I: IntoIterator<Item = A>>(iter: I) -> Self {
         let mut keys = PackedKeys::new();
-        for key in iter {
-            keys.push(key);
-        }
-        keys.shrink_to_fit();
+        keys.extend(iter);
         keys
     }
 }
 
-impl<B: AsRef<[u8]>> Extend<B> for PackedKeys {
-    fn extend<I: IntoIterator<Item = B>>(&mut self, iter: I) {
+impl<A: AsRef<[u8]>> FromIterator<A> for PackedKeys {
+    fn from_iter<I: IntoIterator<Item = A>>(iter: I) -> Self {
+        iter.into_iter()
+            .collect::<PackedKeys<Vec<u8>, Vec<usize>>>()
+            .into_boxed()
+    }
+}
+
+impl<A: AsRef<[u8]>> Extend<A> for PackedKeys<Vec<u8>, Vec<usize>> {
+    fn extend<I: IntoIterator<Item = A>>(&mut self, iter: I) {
         for key in iter {
             self.push(key);
         }

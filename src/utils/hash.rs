@@ -1,7 +1,7 @@
 /*
  * SPDX-FileCopyrightText: 2026 Sebastiano Vigna
  *
- * SPDX-License-Identifier: Apache-2.0 OR LGPL-2.1-or-later
+ * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
 //! Prefix hashing.
@@ -71,6 +71,8 @@ pub trait PrefixHasher {
 /// ```
 #[derive(Debug, Clone, Copy, Default, MemSize, MemDbg)]
 #[mem_size(flat)]
+#[repr(C)]
+#[cfg_attr(feature = "epserde", derive(epserde::Epserde), epserde(zero_copy))]
 pub struct Xxh3;
 
 /// The [prefix hasher](PrefixHasher) of [`Xxh3`].
@@ -117,6 +119,8 @@ impl PrefixHasher for Xxh3Hasher<'_> {
 /// ```
 #[derive(Debug, Clone, Copy, Default, MemSize, MemDbg)]
 #[mem_size(flat)]
+#[repr(C)]
+#[cfg_attr(feature = "epserde", derive(epserde::Epserde), epserde(zero_copy))]
 pub struct Chain;
 
 const K1: u64 = 0xA076_1D64_78BD_642F;
