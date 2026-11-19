@@ -354,7 +354,8 @@ What it says about z-fast tries:
   prefixes in a trie was introduced independently by Ruzic, although there,
   the keys associated with a node are stored in different hash tables
   depending on their size instead of storing them all in the same hash, and
-  the data structure is static." (Reference: `Ruzic2009Making`.)
+  the data structure is static." (Reference: `Ruzic2009Making`. The "one year earlier" paper is
+  `Belazzougui2009Monotone`; the dynamic one is `Belazzougui2010Dynamic`.)
 - Bounds attributed: "queries in O(log log u) worst-case time, and updates in
   O(log log u) expected time. As for other data structures, the only reason
   of having probabilities in the update bound is the use of hashing." The
@@ -427,7 +428,7 @@ remark that all length-reduction structures have times independent of n.
 
 ### 5.3 Indices with few probes to the keys
 
-- `Cohen2015Minimal` (ESA 2013 as "Minimal Indices for Successor Search")
+- `Cohen2015Minimal` (MFCS 2013 as "Minimal Indices for Successor Search")
   **[R: abstract, Table 1 and related-work passages, local copy]**: static;
   an index of O(n log w) bits with an optimal number of probes and O(1)
   probes to the keys, at the price of O(log w) extra word operations. It
@@ -558,7 +559,7 @@ remark that all length-reduction structures have times independent of n.
   array (already cited in the paper) is the randomised counterpart based on
   the z-map.
 - Cites z-fast tries: no. (It cites Belazzougui's packed string matching and
-  Ruzic's ICALP 2008 dictionary.)
+  Ruzic's ICALP 2008 dictionary, `Ruzic2008Constructing`.)
 
 ### 6.5 Takagi, Inenaga, Sadakane, Arimura: packed compact tries
 

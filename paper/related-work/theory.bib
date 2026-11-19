@@ -1,0 +1,707 @@
+% theory.bib -- references for related-work/theory.md (survey of 2026-11-19).
+%
+% Verification. Unless a note in the entry says otherwise, authors, title,
+% venue, volume, number, pages, year and DOI were checked against the Crossref
+% record of the DOI (LIPIcs entries: against the DataCite record). DBLP could
+% not be queried on the day of the survey (its API answered with a bot check).
+% Entries without a registry record carry a "note" field naming the source of
+% the data; LNCS volume numbers are given only where a source confirmed them.
+% Crossref gives some online-first years that differ from the printed volume:
+% this is said in the entry.
+%
+% The file is ASCII; accents are TeX macros.
+
+% ---------------------------------------------------------------------------
+% Integer predecessor search: upper bounds
+% ---------------------------------------------------------------------------
+
+@inproceedings{vanEmdeBoas1975Preserving,
+  author    = {van Emde Boas, Peter},
+  title     = {Preserving order in a forest in less than logarithmic time},
+  booktitle = {16th Annual Symposium on Foundations of Computer Science (FOCS 1975)},
+  pages     = {75--84},
+  publisher = {IEEE},
+  year      = {1975},
+  doi       = {10.1109/SFCS.1975.26}
+}
+
+@article{vanEmdeBoas1977Preserving,
+  author  = {van Emde Boas, Peter},
+  title   = {Preserving order in a forest in less than logarithmic time and linear space},
+  journal = {Information Processing Letters},
+  volume  = {6},
+  number  = {3},
+  pages   = {80--82},
+  year    = {1977},
+  doi     = {10.1016/0020-0190(77)90031-X}
+}
+
+@article{vanEmdeBoas1976Design,
+  author  = {van Emde Boas, Peter and Kaas, R. and Zijlstra, E.},
+  title   = {Design and implementation of an efficient priority queue},
+  journal = {Mathematical Systems Theory},
+  volume  = {10},
+  number  = {1},
+  pages   = {99--127},
+  year    = {1976},
+  doi     = {10.1007/BF01683268},
+  note    = {Crossref dates the issue 1976; the paper is usually cited as 1977. Same paper as EKZDIEPQ in biblio.bib}
+}
+
+@article{Willard1983Loglogarithmic,
+  author  = {Willard, Dan E.},
+  title   = {Log-logarithmic worst-case range queries are possible in space {$\Theta(N)$}},
+  journal = {Information Processing Letters},
+  volume  = {17},
+  number  = {2},
+  pages   = {81--84},
+  year    = {1983},
+  doi     = {10.1016/0020-0190(83)90075-3}
+}
+
+@article{Mehlhorn1990Bounded,
+  author  = {Mehlhorn, Kurt and N{\"a}her, Stefan},
+  title   = {Bounded ordered dictionaries in {$O(\log\log N)$} time and {$O(n)$} space},
+  journal = {Information Processing Letters},
+  volume  = {35},
+  number  = {4},
+  pages   = {183--189},
+  year    = {1990},
+  doi     = {10.1016/0020-0190(90)90022-P}
+}
+
+@article{Fredman1993Surpassing,
+  author  = {Fredman, Michael L. and Willard, Dan E.},
+  title   = {Surpassing the information theoretic bound with fusion trees},
+  journal = {Journal of Computer and System Sciences},
+  volume  = {47},
+  number  = {3},
+  pages   = {424--436},
+  year    = {1993},
+  doi     = {10.1016/0022-0000(93)90040-4}
+}
+
+@inproceedings{Andersson1995Sublogarithmic,
+  author    = {Andersson, Arne},
+  title     = {Sublogarithmic searching without multiplications},
+  booktitle = {Proceedings of the 36th Annual Symposium on Foundations of Computer Science (FOCS 1995)},
+  pages     = {655--663},
+  publisher = {IEEE Computer Society Press},
+  year      = {1995},
+  doi       = {10.1109/SFCS.1995.492667}
+}
+
+@inproceedings{Andersson1996Faster,
+  author    = {Andersson, Arne},
+  title     = {Faster deterministic sorting and searching in linear space},
+  booktitle = {Proceedings of the 37th Conference on Foundations of Computer Science (FOCS 1996)},
+  pages     = {135--141},
+  publisher = {IEEE Computer Society Press},
+  year      = {1996},
+  doi       = {10.1109/SFCS.1996.548472}
+}
+
+@article{Andersson2007Dynamic,
+  author  = {Andersson, Arne and Thorup, Mikkel},
+  title   = {Dynamic ordered sets with exponential search trees},
+  journal = {Journal of the ACM},
+  volume  = {54},
+  number  = {3},
+  pages   = {13},
+  year    = {2007},
+  doi     = {10.1145/1236457.1236460},
+  note    = {Article 13. arXiv cs/0210006. Same paper as AnTDOSEST in biblio.bib}
+}
+
+@inproceedings{Andersson2001Dynamic,
+  author    = {Andersson, Arne and Thorup, Mikkel},
+  title     = {Dynamic string searching},
+  booktitle = {Proceedings of the 12th Annual {ACM}-{SIAM} Symposium on Discrete Algorithms (SODA 2001)},
+  pages     = {307--308},
+  year      = {2001},
+  note      = {No registry record found; data from the reference list of Andersson2007Dynamic, which contains the full version}
+}
+
+@article{Beame2002Optimal,
+  author  = {Beame, Paul and Fich, Faith E.},
+  title   = {Optimal bounds for the predecessor problem and related problems},
+  journal = {Journal of Computer and System Sciences},
+  volume  = {65},
+  number  = {1},
+  pages   = {38--72},
+  year    = {2002},
+  doi     = {10.1006/jcss.2002.1822}
+}
+
+@inproceedings{Patrascu2006Timespace,
+  author    = {P{\u{a}}tra{\c{s}}cu, Mihai and Thorup, Mikkel},
+  title     = {Time-space trade-offs for predecessor search},
+  booktitle = {Proceedings of the 38th Annual {ACM} Symposium on Theory of Computing (STOC 2006)},
+  pages     = {232--240},
+  publisher = {ACM},
+  year      = {2006},
+  doi       = {10.1145/1132516.1132551},
+  note      = {Full version: arXiv cs/0603043}
+}
+
+@inproceedings{Patrascu2007Randomization,
+  author    = {P{\u{a}}tra{\c{s}}cu, Mihai and Thorup, Mikkel},
+  title     = {Randomization does not help searching predecessors},
+  booktitle = {Proceedings of the 18th Annual {ACM}-{SIAM} Symposium on Discrete Algorithms (SODA 2007)},
+  pages     = {555--564},
+  year      = {2007},
+  note      = {No registry record found; pages from the reference list of Patrascu2014Dynamic. Same paper as PaTRDNHSP in biblio.bib}
+}
+
+@inproceedings{Patrascu2014Dynamic,
+  author    = {P{\u{a}}tra{\c{s}}cu, Mihai and Thorup, Mikkel},
+  title     = {Dynamic integer sets with optimal rank, select, and predecessor search},
+  booktitle = {55th {IEEE} Annual Symposium on Foundations of Computer Science (FOCS 2014)},
+  pages     = {166--175},
+  publisher = {IEEE},
+  year      = {2014},
+  doi       = {10.1109/FOCS.2014.26},
+  note      = {arXiv 1408.3045}
+}
+
+@inproceedings{Dinklage2021Engineering,
+  author    = {Dinklage, Patrick and Fischer, Johannes and Herlez, Alexander},
+  title     = {Engineering predecessor data structures for dynamic integer sets},
+  booktitle = {19th International Symposium on Experimental Algorithms (SEA 2021)},
+  series    = {LIPIcs},
+  volume    = {190},
+  pages     = {7:1--7:19},
+  publisher = {Schloss Dagstuhl -- Leibniz-Zentrum f{\"u}r Informatik},
+  year      = {2021},
+  doi       = {10.4230/LIPIcs.SEA.2021.7},
+  note      = {arXiv 2104.06740}
+}
+
+% ---------------------------------------------------------------------------
+% Lower bounds and model issues
+% ---------------------------------------------------------------------------
+
+@inproceedings{Fredman1989Cell,
+  author    = {Fredman, Michael L. and Saks, Michael E.},
+  title     = {The cell probe complexity of dynamic data structures},
+  booktitle = {Proceedings of the 21st Annual {ACM} Symposium on Theory of Computing (STOC 1989)},
+  pages     = {345--354},
+  publisher = {ACM},
+  year      = {1989},
+  doi       = {10.1145/73007.73040}
+}
+
+@article{Sen2008Lower,
+  author  = {Sen, Pranab and Venkatesh, Srinivasan},
+  title   = {Lower bounds for predecessor searching in the cell probe model},
+  journal = {Journal of Computer and System Sciences},
+  volume  = {74},
+  number  = {3},
+  pages   = {364--385},
+  year    = {2008},
+  doi     = {10.1016/j.jcss.2007.06.016}
+}
+
+@inproceedings{Andersson1996Static,
+  author    = {Andersson, Arne and Miltersen, Peter Bro and Riis, S{\o}ren and Thorup, Mikkel},
+  title     = {Static dictionaries on {AC}$^0$ {RAM}s: query time {$\Theta(\sqrt{\log n/\log\log n})$} is necessary and sufficient},
+  booktitle = {Proceedings of the 37th Conference on Foundations of Computer Science (FOCS 1996)},
+  pages     = {441--450},
+  publisher = {IEEE Computer Society Press},
+  year      = {1996},
+  doi       = {10.1109/SFCS.1996.548503}
+}
+
+@inproceedings{Thorup2003AC0,
+  author    = {Thorup, Mikkel},
+  title     = {On {AC}$^0$ implementations of fusion trees and atomic heaps},
+  booktitle = {Proceedings of the 14th Annual {ACM}-{SIAM} Symposium on Discrete Algorithms (SODA 2003)},
+  pages     = {699--707},
+  year      = {2003},
+  note      = {No registry record found; data from the reference list of Patrascu2014Dynamic}
+}
+
+% ---------------------------------------------------------------------------
+% Surveys
+% ---------------------------------------------------------------------------
+
+@article{Navarro2020Predecessor,
+  author  = {Navarro, Gonzalo and Rojas-Ledesma, Javiel},
+  title   = {Predecessor search},
+  journal = {ACM Computing Surveys},
+  volume  = {53},
+  number  = {5},
+  pages   = {105:1--105:35},
+  year    = {2020},
+  doi     = {10.1145/3409371}
+}
+
+@incollection{Belazzougui2016Predecessor,
+  author    = {Belazzougui, Djamal},
+  title     = {Predecessor search, string algorithms and data structures},
+  booktitle = {Encyclopedia of Algorithms},
+  pages     = {1605--1611},
+  publisher = {Springer},
+  year      = {2016},
+  doi       = {10.1007/978-1-4939-2864-4_632}
+}
+
+% ---------------------------------------------------------------------------
+% Variants on integers
+% ---------------------------------------------------------------------------
+
+@inproceedings{Alstrup2001Optimal,
+  author    = {Alstrup, Stephen and Brodal, Gerth St{\o}lting and Rauhe, Theis},
+  title     = {Optimal static range reporting in one dimension},
+  booktitle = {Proceedings of the 33rd Annual {ACM} Symposium on Theory of Computing (STOC 2001)},
+  pages     = {476--482},
+  publisher = {ACM},
+  year      = {2001},
+  doi       = {10.1145/380752.380842}
+}
+
+@inproceedings{Mortensen2005Dynamic,
+  author    = {Mortensen, Christian Worm and Pagh, Rasmus and P{\u{a}}tra{\c{s}}cu, Mihai},
+  title     = {On dynamic range reporting in one dimension},
+  booktitle = {Proceedings of the 37th Annual {ACM} Symposium on Theory of Computing (STOC 2005)},
+  pages     = {104--111},
+  publisher = {ACM},
+  year      = {2005},
+  doi       = {10.1145/1060590.1060606},
+  note      = {arXiv cs/0502032}
+}
+
+@article{Bose2013Fast,
+  author  = {Bose, Prosenjit and Dou{\"\i}eb, Karim and Dujmovi{\'c}, Vida and Howat, John and Morin, Pat},
+  title   = {Fast local searches and updates in bounded universes},
+  journal = {Computational Geometry},
+  volume  = {46},
+  number  = {2},
+  pages   = {181--189},
+  year    = {2013},
+  doi     = {10.1016/j.comgeo.2012.01.002},
+  note    = {Conference version: CCCG 2010}
+}
+
+@misc{Belazzougui2012Predecessor,
+  author        = {Belazzougui, Djamal and Boldi, Paolo and Vigna, Sebastiano},
+  title         = {Predecessor search with distance-sensitive query time},
+  year          = {2012},
+  eprint        = {1209.5441},
+  archiveprefix = {arXiv},
+  primaryclass  = {cs.DS},
+  note          = {arXiv:1209.5441}
+}
+
+@inproceedings{Ehrhardt2017Delta,
+  author    = {Ehrhardt, Marcel and Mulzer, Wolfgang},
+  title     = {Delta-fast tries: Local searches in bounded universes with linear space},
+  booktitle = {Algorithms and Data Structures -- 15th International Symposium, WADS 2017},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {361--372},
+  publisher = {Springer},
+  year      = {2017},
+  doi       = {10.1007/978-3-319-62127-2_31}
+}
+
+@mastersthesis{Ehrhardt2015Indepth,
+  author = {Ehrhardt, Marcel},
+  title  = {An in-depth analysis of data structures derived from van-{E}mde-{B}oas-trees},
+  school = {Freie Universit{\"a}t Berlin, Institut f{\"u}r Informatik},
+  year   = {2015},
+  month  = oct,
+  url    = {https://www.mi.fu-berlin.de/inf/groups/ag-ti/theses/download/Ehrhardt15.pdf},
+  note   = {Data from the title page of the thesis}
+}
+
+@article{Cohen2015Minimal,
+  author  = {Cohen, Sarel and Fiat, Amos and Hershcovitch, Moshik and Kaplan, Haim},
+  title   = {Minimal indices for predecessor search},
+  journal = {Information and Computation},
+  volume  = {240},
+  pages   = {12--30},
+  year    = {2015},
+  doi     = {10.1016/j.ic.2014.09.005},
+  note    = {Conference version: Minimal indices for successor search, MFCS 2013 proceedings chapter, DOI 10.1007/978-3-642-40313-2\_26; arXiv 1306.3772}
+}
+
+@inproceedings{Bille2022Predecessor,
+  author    = {Bille, Philip and G{\o}rtz, Inge Li and Stordalen, Tord},
+  title     = {Predecessor on the ultra-wide word {RAM}},
+  booktitle = {18th Scandinavian Symposium and Workshops on Algorithm Theory (SWAT 2022)},
+  series    = {LIPIcs},
+  volume    = {227},
+  pages     = {18:1--18:15},
+  publisher = {Schloss Dagstuhl -- Leibniz-Zentrum f{\"u}r Informatik},
+  year      = {2022},
+  doi       = {10.4230/LIPIcs.SWAT.2022.18}
+}
+
+@article{Bille2024Predecessor,
+  author  = {Bille, Philip and G{\o}rtz, Inge Li and Stordalen, Tord},
+  title   = {Predecessor on the ultra-wide word {RAM}},
+  journal = {Algorithmica},
+  volume  = {86},
+  number  = {5},
+  pages   = {1578--1599},
+  year    = {2024},
+  doi     = {10.1007/s00453-023-01193-1},
+  note    = {arXiv 2201.11550}
+}
+
+% ---------------------------------------------------------------------------
+% Strings on the word RAM
+% ---------------------------------------------------------------------------
+
+@inproceedings{Ruzic2007Making,
+  author    = {Ru{\v{z}}i{\'c}, Milan},
+  title     = {Making deterministic signatures quickly},
+  booktitle = {Proceedings of the 18th Annual {ACM}-{SIAM} Symposium on Discrete Algorithms (SODA 2007)},
+  pages     = {900--909},
+  year      = {2007},
+  note      = {No registry record found; data from the reference list of Ruzic2009Making}
+}
+
+@article{Ruzic2009Making,
+  author  = {Ru{\v{z}}i{\'c}, Milan},
+  title   = {Making deterministic signatures quickly},
+  journal = {ACM Transactions on Algorithms},
+  volume  = {5},
+  number  = {3},
+  pages   = {26:1--26:26},
+  year    = {2009},
+  doi     = {10.1145/1541885.1541887}
+}
+
+@inproceedings{Ruzic2008Constructing,
+  author    = {Ru{\v{z}}i{\'c}, Milan},
+  title     = {Constructing efficient dictionaries in close to sorting time},
+  booktitle = {Automata, Languages and Programming, 35th International Colloquium, ICALP 2008},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {84--95},
+  publisher = {Springer},
+  year      = {2008},
+  doi       = {10.1007/978-3-540-70575-8_8}
+}
+
+@inproceedings{Fischer2015Alphabet,
+  author    = {Fischer, Johannes and Gawrychowski, Pawe{\l}},
+  title     = {Alphabet-dependent string searching with wexponential search trees},
+  booktitle = {Combinatorial Pattern Matching -- 26th Annual Symposium, CPM 2015},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {160--171},
+  publisher = {Springer},
+  year      = {2015},
+  doi       = {10.1007/978-3-319-19929-0_14},
+  note      = {arXiv 1302.3347}
+}
+
+@inproceedings{Bille2017Deterministic,
+  author    = {Bille, Philip and G{\o}rtz, Inge Li and Skjoldjensen, Frederik Rye},
+  title     = {Deterministic indexing for packed strings},
+  booktitle = {28th Annual Symposium on Combinatorial Pattern Matching (CPM 2017)},
+  series    = {LIPIcs},
+  volume    = {78},
+  pages     = {6:1--6:11},
+  publisher = {Schloss Dagstuhl -- Leibniz-Zentrum f{\"u}r Informatik},
+  year      = {2017},
+  doi       = {10.4230/LIPIcs.CPM.2017.6},
+  note      = {arXiv 1612.01748}
+}
+
+@inproceedings{Takagi2016Packed,
+  author    = {Takagi, Takuya and Inenaga, Shunsuke and Sadakane, Kunihiko and Arimura, Hiroki},
+  title     = {Packed compact tries: A fast and efficient data structure for online string processing},
+  booktitle = {Combinatorial Algorithms (IWOCA 2016)},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {213--225},
+  publisher = {Springer},
+  year      = {2016},
+  doi       = {10.1007/978-3-319-44543-4_17},
+  note      = {arXiv 1602.00422. Crossref gives the book title ``Combinatorial Algorithms''; the conference acronym is not in the record}
+}
+
+@article{Takagi2017Packed,
+  author  = {Takagi, Takuya and Inenaga, Shunsuke and Sadakane, Kunihiko and Arimura, Hiroki},
+  title   = {Packed compact tries: A fast and efficient data structure for online string processing},
+  journal = {IEICE Transactions on Fundamentals of Electronics, Communications and Computer Sciences},
+  volume  = {E100.A},
+  number  = {9},
+  pages   = {1785--1793},
+  year    = {2017},
+  doi     = {10.1587/transfun.E100.A.1785}
+}
+
+@inproceedings{Tsuruta2020Ctrie,
+  author    = {Tsuruta, Kazuya and K{\"o}ppl, Dominik and Kanda, Shunsuke and Nakashima, Yuto and Inenaga, Shunsuke and Bannai, Hideo and Takeda, Masayuki},
+  title     = {c-trie++: A dynamic trie tailored for fast prefix searches},
+  booktitle = {2020 Data Compression Conference (DCC)},
+  pages     = {243--252},
+  publisher = {IEEE},
+  year      = {2020},
+  doi       = {10.1109/DCC47342.2020.00032}
+}
+
+@article{Tsuruta2022Ctrie,
+  author  = {Tsuruta, Kazuya and K{\"o}ppl, Dominik and Kanda, Shunsuke and Nakashima, Yuto and Inenaga, Shunsuke and Bannai, Hideo and Takeda, Masayuki},
+  title   = {c-trie++: A dynamic trie tailored for fast prefix searches},
+  journal = {Information and Computation},
+  volume  = {285},
+  pages   = {104794},
+  year    = {2022},
+  doi     = {10.1016/j.ic.2021.104794},
+  note    = {arXiv 1904.07467. Journal version of TKKctriepp in biblio.bib}
+}
+
+@article{Jansson2015Linked,
+  author  = {Jansson, Jesper and Sadakane, Kunihiko and Sung, Wing-Kin},
+  title   = {Linked dynamic tries with applications to {LZ}-compression in sublinear time and space},
+  journal = {Algorithmica},
+  volume  = {71},
+  number  = {4},
+  pages   = {969--988},
+  year    = {2015},
+  doi     = {10.1007/s00453-013-9836-6},
+  note    = {Crossref gives 2013, the year of online publication; the year of volume 71(4) was not checked against the printed issue}
+}
+
+@inproceedings{Eppstein2025Ziptries,
+  author    = {Eppstein, David and Gila, Ofek and Goodrich, Michael T. and Kitagawa, Ryuto},
+  title     = {Zip-tries: Simple dynamic data structures for strings},
+  booktitle = {2025 Proceedings of the Conference on Applied and Computational Discrete Algorithms (ACDA)},
+  pages     = {130--143},
+  publisher = {SIAM},
+  year      = {2025},
+  doi       = {10.1137/1.9781611978759.10},
+  note      = {arXiv 2505.04953. Crossref has a second record with the same metadata, DOI 10.1137/1.9781611979084.10}
+}
+
+@inproceedings{Grossi1999Efficient,
+  author    = {Grossi, Roberto and Italiano, Giuseppe F.},
+  title     = {Efficient techniques for maintaining multidimensional keys in linked data structures (extended abstract)},
+  booktitle = {Automata, Languages and Programming, 26th International Colloquium, ICALP 1999},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {372--381},
+  publisher = {Springer},
+  year      = {1999},
+  doi       = {10.1007/3-540-48523-6_34}
+}
+
+% ---------------------------------------------------------------------------
+% Strings in external memory and in the cache-oblivious model
+% ---------------------------------------------------------------------------
+
+@article{Ferragina1999String,
+  author  = {Ferragina, Paolo and Grossi, Roberto},
+  title   = {The string {B}-tree: A new data structure for string search in external memory and its applications},
+  journal = {Journal of the ACM},
+  volume  = {46},
+  number  = {2},
+  pages   = {236--280},
+  year    = {1999},
+  doi     = {10.1145/301970.301973},
+  note    = {Same paper as FeGSBT in biblio.bib}
+}
+
+@inproceedings{Bender2006Cacheoblivious,
+  author    = {Bender, Michael A. and Farach-Colton, Martin and Kuszmaul, Bradley C.},
+  title     = {Cache-oblivious string {B}-trees},
+  booktitle = {Proceedings of the 25th {ACM} {SIGMOD}-{SIGACT}-{SIGART} Symposium on Principles of Database Systems (PODS 2006)},
+  pages     = {233--242},
+  publisher = {ACM},
+  year      = {2006},
+  doi       = {10.1145/1142351.1142385}
+}
+
+@inproceedings{Brodal2006Cacheoblivious,
+  author    = {Brodal, Gerth St{\o}lting and Fagerberg, Rolf},
+  title     = {Cache-oblivious string dictionaries},
+  booktitle = {Proceedings of the 17th Annual {ACM}-{SIAM} Symposium on Discrete Algorithms (SODA 2006)},
+  pages     = {581--590},
+  publisher = {ACM Press},
+  year      = {2006},
+  doi       = {10.1145/1109557.1109621}
+}
+
+% ---------------------------------------------------------------------------
+% The authors' own papers referred to in the report
+% ---------------------------------------------------------------------------
+
+@inproceedings{Belazzougui2009Monotone,
+  author    = {Belazzougui, Djamal and Boldi, Paolo and Pagh, Rasmus and Vigna, Sebastiano},
+  title     = {Monotone minimal perfect hashing: Searching a sorted table with {$O(1)$} accesses},
+  booktitle = {Proceedings of the 20th Annual {ACM}-{SIAM} Symposium on Discrete Algorithms (SODA 2009)},
+  pages     = {785--794},
+  publisher = {SIAM},
+  year      = {2009},
+  doi       = {10.1137/1.9781611973068.86},
+  note      = {Same paper as BBPMMPH in biblio.bib}
+}
+
+@inproceedings{Belazzougui2010Fast,
+  author    = {Belazzougui, Djamal and Boldi, Paolo and Pagh, Rasmus and Vigna, Sebastiano},
+  title     = {Fast prefix search in little space, with applications},
+  booktitle = {Algorithms -- ESA 2010, 18th Annual European Symposium},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {427--438},
+  publisher = {Springer},
+  year      = {2010},
+  doi       = {10.1007/978-3-642-15775-2_37},
+  note      = {Full version: arXiv 1804.04720}
+}
+
+@inproceedings{Belazzougui2010Dynamic,
+  author    = {Belazzougui, Djamal and Boldi, Paolo and Vigna, Sebastiano},
+  title     = {Dynamic {Z}-fast tries},
+  booktitle = {String Processing and Information Retrieval -- 17th International Symposium, SPIRE 2010},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {6393},
+  pages     = {159--172},
+  publisher = {Springer},
+  year      = {2010},
+  doi       = {10.1007/978-3-642-16321-0_15},
+  note      = {Same paper as BBVDZT in biblio.bib}
+}
+
+% ---------------------------------------------------------------------------
+% Hashing and signatures
+% ---------------------------------------------------------------------------
+
+@article{Karp1987Efficient,
+  author  = {Karp, Richard M. and Rabin, Michael O.},
+  title   = {Efficient randomized pattern-matching algorithms},
+  journal = {IBM Journal of Research and Development},
+  volume  = {31},
+  number  = {2},
+  pages   = {249--260},
+  year    = {1987},
+  doi     = {10.1147/rd.312.0249}
+}
+
+@inproceedings{Dietzfelbinger1992Polynomial,
+  author    = {Dietzfelbinger, Martin and Gil, Joseph and Matias, Yossi and Pippenger, Nicholas},
+  title     = {Polynomial hash functions are reliable (extended abstract)},
+  booktitle = {Automata, Languages and Programming, 19th International Colloquium, ICALP 1992},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {235--246},
+  publisher = {Springer},
+  year      = {1992},
+  doi       = {10.1007/3-540-55719-9_77}
+}
+
+@misc{Thorup2015High,
+  author        = {Thorup, Mikkel},
+  title         = {High speed hashing for integers and strings},
+  year          = {2015},
+  eprint        = {1504.06804},
+  archiveprefix = {arXiv},
+  primaryclass  = {cs.DS},
+  note          = {arXiv:1504.06804; version 9 (May 2020) was read}
+}
+
+@incollection{Broder1993Some,
+  author    = {Broder, Andrei Z.},
+  title     = {Some applications of {R}abin's fingerprinting method},
+  booktitle = {Sequences {II}},
+  pages     = {143--152},
+  publisher = {Springer},
+  year      = {1993},
+  doi       = {10.1007/978-1-4613-9323-8_11}
+}
+
+% ---------------------------------------------------------------------------
+% Dynamic dictionaries
+% ---------------------------------------------------------------------------
+
+@article{Dietzfelbinger1994Dynamic,
+  author  = {Dietzfelbinger, Martin and Karlin, Anna and Mehlhorn, Kurt and Meyer auf der Heide, Friedhelm and Rohnert, Hans and Tarjan, Robert E.},
+  title   = {Dynamic perfect hashing: Upper and lower bounds},
+  journal = {SIAM Journal on Computing},
+  volume  = {23},
+  number  = {4},
+  pages   = {738--761},
+  year    = {1994},
+  doi     = {10.1137/S0097539791194094},
+  note    = {Same paper as DKMDPHULB in biblio.bib}
+}
+
+@inproceedings{Dietzfelbinger1990New,
+  author    = {Dietzfelbinger, Martin and Meyer auf der Heide, Friedhelm},
+  title     = {A new universal class of hash functions and dynamic hashing in real time},
+  booktitle = {Automata, Languages and Programming, 17th International Colloquium, ICALP 1990},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {6--19},
+  publisher = {Springer},
+  year      = {1990},
+  doi       = {10.1007/BFb0032018},
+  note      = {The Crossref record has no year; 1990 and the colloquium number are from memory and must be checked}
+}
+
+@article{Pagh2004Cuckoo,
+  author  = {Pagh, Rasmus and Rodler, Flemming Friche},
+  title   = {Cuckoo hashing},
+  journal = {Journal of Algorithms},
+  volume  = {51},
+  number  = {2},
+  pages   = {122--144},
+  year    = {2004},
+  doi     = {10.1016/j.jalgor.2003.12.002},
+  note    = {Journal version of PaRCH in biblio.bib}
+}
+
+@inproceedings{Arbitman2009Deamortized,
+  author    = {Arbitman, Yuriy and Naor, Moni and Segev, Gil},
+  title     = {De-amortized cuckoo hashing: Provable worst-case performance and experimental results},
+  booktitle = {Automata, Languages and Programming, 36th International Colloquium, ICALP 2009},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {107--118},
+  publisher = {Springer},
+  year      = {2009},
+  doi       = {10.1007/978-3-642-02927-1_11}
+}
+
+@inproceedings{Arbitman2010Backyard,
+  author    = {Arbitman, Yuriy and Naor, Moni and Segev, Gil},
+  title     = {Backyard cuckoo hashing: Constant worst-case operations with a succinct representation},
+  booktitle = {51st Annual {IEEE} Symposium on Foundations of Computer Science (FOCS 2010)},
+  pages     = {787--796},
+  publisher = {IEEE},
+  year      = {2010},
+  doi       = {10.1109/FOCS.2010.80},
+  note      = {arXiv 0912.5424}
+}
+
+@article{Bender2023Iceberg,
+  author  = {Bender, Michael A. and Conway, Alex and Farach-Colton, Mart{\'\i}n and Kuszmaul, William and Tagliavini, Guido},
+  title   = {Iceberg hashing: Optimizing many hash-table criteria at once},
+  journal = {Journal of the ACM},
+  volume  = {70},
+  number  = {6},
+  pages   = {1--51},
+  year    = {2023},
+  doi     = {10.1145/3625817},
+  note    = {arXiv 2109.04548. The article number was not checked}
+}
+
+@article{Pagh2009Linear,
+  author  = {Pagh, Anna and Pagh, Rasmus and Ru{\v{z}}i{\'c}, Milan},
+  title   = {Linear probing with constant independence},
+  journal = {SIAM Journal on Computing},
+  volume  = {39},
+  number  = {3},
+  pages   = {1107--1120},
+  year    = {2009},
+  doi     = {10.1137/070702278}
+}
+
+@article{Patrascu2012Power,
+  author  = {P{\u{a}}tra{\c{s}}cu, Mihai and Thorup, Mikkel},
+  title   = {The power of simple tabulation hashing},
+  journal = {Journal of the ACM},
+  volume  = {59},
+  number  = {3},
+  pages   = {1--50},
+  year    = {2012},
+  doi     = {10.1145/2220357.2220361},
+  note    = {The article number was not checked}
+}
