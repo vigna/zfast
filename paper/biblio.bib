@@ -187,33 +187,7 @@
   volume    = {6393},
   editor    = {Edgar Ch{\'a}vez and Stefano Lonardi},
   pages     = {159--172},
-  series    = {Lecture Notes in Computer Science},
-  notextra  = {               
-               <p>We describe a dynamic version of the <em>z-fast trie</em>, a
-               new data structure inspired by the research started by the van Emde Boas
-               trees and followed by the development of y-fast tries. The dynamic z-fast trie is a very
-               simple, uniform data structure: given a set <var>S</var> of <var>n</var> variable-length strings, it is
-               formed by a standard compacted trie on <var>S</var>
-               (with two additional pointers per node), endowed with a dictionary of
-               size <var>n</var>&minus;1. With this simple setup, the dynamic z-fast trie provides
-               predecessors/successors in time
-               <i>O</i>(log max{&nbsp;|<var>x</var>|, |<var>x</var><sup>+</sup>|, |<var>x</var><sup>-</sup>|&nbsp;}) (<var>x</var><sup>&plusmn;</sup> is the
-               successor/predecessor of <var>x</var> in <var>S</var>) for strings of length linear in the
-               machine-word size <var>w</var>. Prefix queries are answered in time <i>O</i>(log|<var>x</var>|+<var>k</var>), and range queries in time
-               <i>O</i>(log max{&nbsp;|<var>x</var>|, |y|, |<var>x</var><sup>-</sup>|, |<var>y</var><sup>+</sup>|&nbsp;}+<var>k</var>), where <var>k</var> is the number of elements
-               in the output and  <var>x</var> (and <var>y</var>) represent the input of the
-               prefix (range) queries. Updates are performed within the
-               same bounds in expectation (or with high probability using an appropriate
-               dictionary). We then show a simple modification that makes it
-               possible to handle strings of length up to 2<sup><var>w</var></sup>; in this case, predecessor/successor queries
-               and updates are supported in <i>O</i>(|<var>x</var>|/w + log max{&nbsp;|<var>x</var>|, |<var>x</var><sup>+</sup>|, |<var>x</var><sup>-</sup>|&nbsp;}) time, 
-               (and <i>O</i>(|<var>x</var>|/<var>B</var> + log max{&nbsp;|<var>x</var>|, |<var>x</var><sup>+</sup>|, |<var>x</var><sup>-</sup>|&nbsp;}) I/Os in the cache-oblivious
-               model) with high probability. The space occupied
-               by a dynamic z-fast trie, beside that necessary to store <var>S</var>, is just of 12<var>n</var>
-               pointers, <var>n</var> integers and, in the ``long string'' case, <i>O</i>(<var>n</var>) signatures of
-               <i>O</i>(<var>w</var>) bits each.</p>               
-               },
-  category  = CONVEGNO
+  series    = {Lecture Notes in Computer Science}
 }
 
 @article{FrWSITBFT,
@@ -225,4 +199,43 @@
   year    = {1993},
   volume  = {47},
   number  = {3}
+}
+
+@inproceedings{BoVKNDLSM,
+  author    = {Paolo Boldi and Sebastiano Vigna},
+  title     = {Kings, Name Days, Lazy Servants and Magic},
+  booktitle = {9th International Conference on Fun with Algorithms (FUN 2018)},
+  pages     = {10:1--10:13},
+  series    = {Leibniz International Proceedings in Informatics (LIPIcs)},
+  year      = {2018},
+  volume    = {100},
+  editor    = {Hiro Ito and Stefano Leonardi and Linda Pagli and Giuseppe Prencipe},
+  publisher = {Schloss Dagstuhl--Leibniz-Zentrum fuer Informatik},
+  address   = {Dagstuhl, Germany}
+}
+
+@inproceedings{BMVEZA,
+  author    = {Paolo Boldi and Stefano Marchini and Sebastiano Vigna},
+  editor    = {Leo Liberti},
+  title     = {Engineering Zuffix Arrays},
+  booktitle = {22nd International Symposium on Experimental Algorithms, {SEA} 2024,
+               Vienna, Austria},
+  series    = {LIPIcs},
+  publisher = {Schloss Dagstuhl - Leibniz-Zentrum f{\"{u}}r Informatik},
+  year      = {2024}
+}
+
+@misc{TKKctriepp,
+  author = {Kazuya Tsuruta and Dominik K{\"o}ppl and Shunsuke Kanda and Yuto Nakashima and
+            Shunsuke Inenaga and Hideo Bannai and Masayuki Takeda},
+  title  = {c-trie++: A Dynamic Trie Tailored for Fast Prefix Searches},
+  note   = {arXiv:1904.07467},
+  year   = {2019}
+}
+
+@misc{WNJWormhole,
+  author = {Xingbo Wu and Fan Ni and Song Jiang},
+  title  = {Wormhole: A Fast Ordered Index for In-memory Data Management},
+  note   = {arXiv:1805.02200},
+  year   = {2018}
 }

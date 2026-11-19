@@ -15,6 +15,7 @@
 \usepackage[normalsize]{subfigure}
 \usepackage{sidecap}
 \usepackage{todonotes}
+\usepackage{url}
 
 \usepackage{tikz}
 \usetikzlibrary{arrows, chains, fit, quotes}
@@ -136,7 +137,6 @@
 \newcommand{\C}{\mathscr C}
 \newcommand{\A}{\mathscr A}
 \newcommand{\op}{{\operatorname{op}}}
-\newcommand{\url}{\cite{myurl}}
 
 
 \renewcommand{\emptyset}{\varnothing}
@@ -192,32 +192,40 @@ in time $O(\lg|x|)$, while updates are performed within the
 same bounds in expectation (or with high probability using an appropriate
 dictionary). We also show a simple modification that makes it
 possible to handle strings of length at most $2^w$; in this case, lookups
-and updates are supported in $O(|x|/w + \lg|x|)$ time 
+and updates are supported in $O(|x|/w + \lg|x|)$ time
 (and $O(|x|/B + \lg|x|)$ I/Os in the cache-oblivious
 model) with high probability. Finally, just adding two suitable pointers
 per node, the z-fast trie can answer
-predecessors/successors queries in time
+predecessor/successor queries in time
 $O(\lg\max\{\?|x|,|x^+|,|x^-|\?\})$ ($x^\pm$ is the
 successor/predecessor of $x$ in $S$) for a string $x$ of length linear in the
 machine-word size $w$. Prefix queries are answered in time $O(\lg|x|+k)$, and range queries in time
 $O(\lg\max\{\?|x|,|y|,|x^-|,|y^+|\?\}+k)$, where $k$ is the number of elements
 in the output and  $x$ (and $y$) represent the input of the
-prefix (range) queries. In the case of strings 
+prefix (range) queries. In the case of strings
 of length at most $2^w$, predecessor/successor queries
-and updates are supported in $O(|x|/w + \lg\max\{\?|x|,|x^+|,|x^-|\?\})$ time, 
+and updates are supported in $O(|x|/w + \lg\max\{\?|x|,|x^+|,|x^-|\?\})$ time
 (and $O(|x|/B + \lg\max\{\?|x|,|x^+|,|x^-|\?\})$ I/Os in the cache-oblivious
 model) with high probability.
 %  The space occupied
 % by a z-fast trie, besides that necessary to store $S$, is just of $12n$
-% pointers, $2n$ integers and, in the ``long string'' case, $O(n)$ signatures of
+% pointers, $2n$ integers and, in the ``long string'' case, $3n$ signatures of
 % $O(w)$ bits each.
-\todo[inline]{Double-check the bounds}
+\todo[inline]{Bounds still to be settled by the authors (the statements of
+Theorems~\ref{th:bounds} and~\ref{th:boundslong} have been made consistent with
+what the body proves; the abstract has not been touched). (1)~The abstract
+claims ``with high probability'' for updates on long strings, but updates
+also modify the dictionary, so Theorem~\ref{th:boundslong} can only claim
+expectation unless a dictionary with high-probability updates is assumed, as
+the abstract does in the short-string case. (2)~Query bounds are worst case
+(short strings) only with a dictionary with worst-case lookups, such as
+Cuckoo hashing; with linear probing, which is what the implementation uses,
+they hold in expectation. (3)~When an update splits or removes the root,
+the signature of a handle of length up to $|e_{\mathrm{root}}|$, which is
+not bounded by $O(|x|)$, has to be computed (see
+Section~\ref{sec:reusinghash}).}
 
 \end{abstract}
-% Leaf: pointer to key, pointer to node holding the key, left/right pointers
-% Internal: left/right pointers, left/right jump pointers, pointer to leaf
-% holding the key, parent extent length
-% Dictionary: 2 signatures, 2 pointers.
 
 \section{Introduction}
 
@@ -225,13 +233,13 @@ Data structures providing successor and predecessor primitives on strings are
 usually classified into \emph{comparison-based} and \emph{digital} structures. The former
 assume to be able to compare strings in constant time; the latter rely on the
 actual (binary) digits forming the strings to do their job. Currently, the
-comparison-based data structure of choice are balanced binary trees and the B-trees (or B$^+$-trees), whereas
+comparison-based data structures of choice are balanced binary trees and B-trees (or B$^+$-trees), whereas
 digital structures have been object of a growing interest in the last years
 starting from the introduction of van Emde Boas trees~\cite{EKZDIEPQ} and
 fusion trees~\cite{FrWSITBFT}, which provide asymptotically faster alternatives
 for large collections.
 
-In this paper, we revisit the classical dynamic predecessor/successors problems on a
+In this paper, we revisit the classical dynamic predecessor/successor problem on a
 set $S$ of size $n$ from a universe of strings of length $\ell$. The static
 version of this problem has been completely solved, with matching upper and
 lower bounds~\cite{PaTRDNHSP}. If only linear space is available, in a significant
@@ -264,6 +272,7 @@ asymptotic: we can provide \emph{exact} bounds, which amount to about a dozen
 machine words per element.
 
 The name ``z-fast trie'' was used for the first time in~\cite{BBPMMPH}.
+A preliminary version of this paper appeared in~\cite{BBVDZT}.
 The structure described in this paper is inspired by the idea of \emph{fat
 binary search} introduced therein, but has little else in common. In particular,
 the structure described in~\cite{BBPMMPH} is a static structure that just
@@ -280,10 +289,10 @@ quickly to the farthest left/right descendant.
 
 The z-fast trie can answer
 optimally a number of other queries, such as predecessor/successor queries, prefix queries, and range queries.
-The main combinatorial results we prove (Theorem~\ref{th:parex}
+The main combinatorial results we prove (Theorems~\ref{th:parex}
 and~\ref{th:fatanc}) 
 highlight a deep connection between jump pointers and fat
-binary search that make it possible to update the additional pointers quickly.
+binary search that makes it possible to update the additional pointers quickly.
 
 \noindent\textbf{Results.} Given a prefix-free set $S$ of $n$ binary
 strings, we let
@@ -313,11 +322,11 @@ We prove the following statements:
 \begin{theorem}
 \label{th:bounds}
 If the string length is bounded by $O(w)$, the z-fast trie answers
-predecessor and successor queries in time $O(\lg\max(|x|,|x^+|,|x^-|))$,
-existential prefix queries in time $O(\lg|x|)$ and existential range queries in
+predecessor and successor queries in time $O(\lg\max\{\?|x|,|x^+|,|x^-|\?\})$,
+membership and existential prefix queries in time $O(\lg|x|)$ and existential range queries in
 time $O(\lg\max\{\?|x|,|y|\?\})$. The expected time required for  insertions and deletions is 
-$O(\lg\max\{\?|x|,|x^+|,|x^-\?\})$. Besides the space 
-required to store $S$, the z-fast trie needs $12n$ pointers and $n$ integers.
+$O(\lg\max\{\?|x|,|x^+|,|x^-|\?\})$. Besides the space 
+required to store $S$, the z-fast trie needs at most $12n$ pointers and $2n$ integers.
 \end{theorem}
 For long strings (i.e., strings of length more than linear in $w$, but still at most $2^w$) we can
 provide a simple randomized variant of the structure, the \emph{signed z-fast
@@ -328,16 +337,20 @@ If the string length is at most $2^w$, the signed z-fast trie
 answers predecessor and successor queries in time
 $O(|x|/w + \lg\max\{\?|x|,|x^+|,|x^-|\?\})$ and $O(|x|/B +
 \lg\max\{\?|x|,|x^+|,|x^-|\?\})$ I/Os (in the cache-oblivious model) \emph{with
-high probability}. Existential prefix queries are answered, always w.h.p., in time 
+high probability}. Membership and existential prefix queries are answered, always w.h.p., in time 
 $O(|x|/w + \lg|x|)$ and $O(|x|/B + \lg|x|)$ I/Os.
 Existential range queries are answered, always w.h.p., in time 
 $O(\max\{\?|x|,|y|\?\}/w + \lg\max\{\?|x|,|y|\?\})$ and
 $O(\max\{\?|x|,|y|\?\}/B + \lg\max\{\?|x|,|y|\?\})$ I/Os. Insertions and deletions are
-performed in time $O(\lg\max\{\?|x|,|x^+|,|x^-|\?\})$, in expectation. 
+performed in time $O(|x|/w+\lg\max\{\?|x|,|x^+|,|x^-|\?\})$ and
+$O(|x|/B+\lg\max\{\?|x|,|x^+|,|x^-|\?\})$ I/Os, in expectation, provided that the update does not split or remove the root
+(see Section~\ref{sec:reusinghash}). 
 Besides the space required to store
-$S$, the signed z-fast trie needs $12n$ pointers, $n$ integers, and $3n$
+$S$, the signed z-fast trie needs at most $12n$ pointers, $2n$ integers, and $3n$
 signatures of $O(w)$ bits each.
 \end{theorem}
+In the statements about insertions and deletions, $x^-$ and $x^+$ denote the predecessor and
+the successor of $x$ in $S\setminus\{\?x\?\}$.
 %We can also answer to prefix and range queries: if the answer is a set $A$
 %whose elements are overall $t$ bits long, the additional time is
 %$O(t/w  + \lg\max(|\min A|,|\max A|) + |A|)$ and the additional I/Os are
@@ -346,12 +359,15 @@ signatures of $O(w)$ bits each.
 We can also answer prefix and range queries: if the answer is a set of $k$ 
 strings, then the I/O and time costs are the same as in the existential
 case, plus $O(k)$ and $O(\lg\max\{\?|x^-|,|y^+|\?\} + k)$ for prefix and
-range queries respectively. Note that the space bounds assume a worst-case dictionary 
-using $3n$ buckets (e.g., a linear-probing hash table with load factor $2/3$ and 
+range queries respectively. Note that the space bounds assume a dictionary 
+using at most $3n$ buckets (e.g., a linear-probing hash table with load factor at most $2/3$ and 
 backing arrays whose length is a power of two, or a variant of Cuckoo
-hashing~\cite{PaRCH}). We remark that the only reason of having expectations in
+hashing~\cite{PaRCH}). The query bounds of Theorem~\ref{th:bounds} are worst-case bounds 
+only if the dictionary provides worst-case constant-time lookups, as Cuckoo hashing does;
+with linear probing they hold in expectation. 
+We remark that the only reason of having expectations in
 the update bounds is the presence of a dictionary: improvements in
-dynamic dictionaries reflects immediately in improvements to the z-fast trie
+dynamic dictionaries reflect immediately in improvements to the z-fast trie
 time and space bounds.
 
 To our knowledge, this is the first paper to propose a digital data structure for
@@ -361,12 +377,12 @@ the main feature of z-fast tries is that they are simple data structures
 which can be actually implemented, and that the space usage is just about a dozen
 machine words per element, independently of the string length. A complete
 implementation is distributed under the GNU Lesser General Public
-License\footnote{\texttt{http://sux4j.dsi.unimi.it/}.}.
+License as part of the Sux4J Java library.\footnote{\url{https://sux4j.di.unimi.it/}}
 
 \noindent\textbf{Previous work.} \todo{This certainly needs to be updated.} From a RAM perspective, several structures
 already provide optimal bounds both in terms of $n$ (e.g., Andersson and
 Thorup~\cite{AnTDOSEST} achieve $O(\sqrt{\lg n/\lg\lg n})$ update/query
-time) and in term of the string length for fixed-length strings (e.g., y-fast tries~\cite{WilLLWRQ}).
+time) and in terms of the string length for fixed-length strings (e.g., y-fast tries~\cite{WilLLWRQ}).
 The main contribution of the z-fast trie is that it is a simple
 structure that can be easily implemented, and that it works with variable-length strings
 longer than $O(w)$.
@@ -377,21 +393,35 @@ n/\lg\lg n})$ time by storing in each node of the trie a predecessor
 structure.\footnote{Using other kinds of digital structures (e.g., the structure
 described in this paper) it would be possible to achieve similarly
 $O(|x|/w + \lg w)$, but this is of little advantage as $O(|x|/w+\lg
-|x|)=(|x|/w+\lg(|x|/w)+\lg w)=O(|x|/w+\lg w)$.}
+|x|)=O(|x|/w+\lg(|x|/w)+\lg w)=O(|x|/w+\lg w)$.}
 Although in principle this solution would be faster in the
 RAM model than ours (for sufficiently small sets), in the
-cache-oblivious model it would require $(|x|/w + \sqrt{\lg
-n/\lg\lg n})$ I/Os---in most cases worse than $O(|x|/B
-+\lg\max(|x|,|x^+|,|x^-|))$ I/Os achieved by our data structure. Moreover,
+cache-oblivious model it would require $O(|x|/w + \sqrt{\lg
+n/\lg\lg n})$ I/Os---in most cases worse than the $O(|x|/B
++\lg\max\{\?|x|,|x^+|,|x^-|\?\})$ I/Os achieved by our data structure. Moreover,
 the construction is rather involved; finally, while the $O(|x|/w)$ term in our
 bound is simply due to the evaluation of a hash function and some bit-vector
 comparisons, the $O(|x|/w)$ term in the trie technique depends on $|x|/w$
 accesses to dictionaries, an operation that in practice is orders of magnitude slower.
 
-In the cache-oblivious model, the string B-trees and its
+In the I/O model, string B-trees and their
 variants~\cite{FeGSBT} provide predecessor/successor queries using
 $O(|x|/B+\lg_B n)$ I/Os. We remark that this bound is in general incomparable to ours. Finally, note
 that the RAM time bound in this case is essentially always worse than ours.
+
+After the preliminary version of this paper~\cite{BBVDZT} appeared, the z-map and fat binary search 
+have been extended to compacted tries on arbitrary alphabets and applied to suffix 
+arrays~\cite{BoVKNDLSM,BMVEZA}. Tsuruta \textit{et al.}~\cite{TKKctriepp} combine a 
+variant of the z-fast trie that takes the alphabet into account with packed 
+compacted tries on short strings to obtain a dynamic keyword dictionary. 
+Wormhole~\cite{WNJWormhole}, an ordered in-memory index, is also based on a binary search on prefix lengths,
+but it stores in a hash table all the prefixes of the keys it uses to separate its leaves,
+whereas the z-map contains one handle per internal node.
+\todo[inline]{Related work still to be updated by the authors: the discussion of 
+optimal bounds predates P\v{a}tra\c{s}cu and Thorup's dynamic predecessor structure with optimal 
+query time (2014), which is not in the bibliography; the claims ``first simple optimal digital data structure'' 
+and ``first paper to propose\dots'' above should be reconsidered in that light, and a comparison
+with dynamic string dictionaries (packed compact tries and their successors) is missing.}
 
 \section{Notation and tools}
 \label{sec:notation}
@@ -433,22 +463,22 @@ Let us briefly discuss how to obtain the 2-fattest number in $[a\..b]$ assuming 
 Since the 2-fattest number in an interval $[a\..b]$ (that is, the value $f \in [a\..b]$
 with maximum number of trailing zeroes) can be $a$ itself, it is easier to think about searching
 for $f$ in the half-open interval $(a-1\..b]$. Looking at the binary expansion of $a-1$ and $b$,
-$a-1$ and $b$  will have a certain longest common prefix $\ell$ followed by 
+$a-1$ and $b$  will have a certain longest common prefix $p$ followed by 
 two suffixes, $\bar a$ and $\bar b$, which start with a 0 and a 1, respectively; for example:
 
 \begin{center}
 \begin{tikzpicture}
 	\node (beq) {$b$};
-	\node[rectangle, draw,label=above:$\ell$, right=1mm of beq] (lcpup) {$\dots00001000101010001$};
+	\node[rectangle, draw,label=above:$p$, right=1mm of beq] (lcpup) {$\dots00001000101010001$};
 	\node[rectangle, draw,label=above:$\bar b$, right=0mm of lcpup, anchor=west] (bara)   {$101011101000000$};
-	\node[rectangle, draw,label=below:$\ell$, below=3mm of lcpup] (lcpdown) {$\dots00001000101010001$};
+	\node[rectangle, draw,label=below:$p$, below=3mm of lcpup] (lcpdown) {$\dots00001000101010001$};
 	\node[rectangle, draw,label=below:$\bar a$, right=0mm of lcpdown] (barb) {$000101110100101$};
 	\node[left=0mm of lcpdown] (aeq) {$a-1$};
 \end{tikzpicture}
 \end{center}
-This first different bit between the two sequences is the most significant bit of
+The first different bit between the two sequences is the most significant bit of
 $(a-1) \oplus b$, and the 2-fattest number we are looking for is hence $(-1 \mathbin\ll \lambda((a-1) \oplus b)) \mathbin\& b$;
-the final $\mathbin\& b$ brings in back the longest common prefix $\ell$:
+the final $\mathbin\& b$ brings back the longest common prefix $p$:
 \begin{center}
 \begin{tikzpicture}
 	\node (feq) {$f$};
@@ -506,7 +536,7 @@ $x_{(4)}$ & $0$ & $0$\\
 $\ldots$ & $\dots$ & $\ldots$
 \end{tabular} 
 \end{tabular}
-\label{fig:tablejumps}\caption{2-fat jumps and backjumps of $x=88$.}
+\caption{\label{fig:tablejumps}2-fat jumps and backjumps of $x=88$.}
 \end{figure}
 
 Note that $(2^n)_\prime=0$, but $(2^n)'=2^{n+1}$. It is an easy observation that iterating $n$ times a jump we always obtain a
@@ -518,10 +548,11 @@ These properties will be silently used throughout the paper.
 We will need the following lemmata:
 \begin{lemma}
 \label{lemma:updown}
-For every $x$, $x'\leq (x_\prime)'$ and $(x')_\prime \leq x_\prime$.
+For every positive integer $x$, $x'\leq (x_\prime)'$ and $(x')_\prime \leq x_\prime$.
 \end{lemma}
 \begin{proof}
-Let $x=a2^b$ with $a$ odd and $b\geq 0$. Then $x_\prime=(a-1)2^b$ and $x'=(a+1)2^b$. Since $a-1$ is even,
+Let $x=a2^b$ with $a$ odd and $b\geq 0$. Then $x_\prime=(a-1)2^b$ and $x'=(a+1)2^b$. 
+If $a=1$ then $x_\prime=0$ and $(x_\prime)'=\infty$, so the first inequality is trivial. Otherwise $a-1$ is even and positive:
 let $a-1=\bar a2^c$ for some $\bar a$ odd and $c>0$.
 By contradiction, if 
 \begin{eqnarray*}
@@ -532,7 +563,8 @@ a-1+2^c &<& a+1\\
 2^c &<& 2  
 \end{eqnarray*}
 contradicting the fact that $c>0$.
-The other inequality follows similarly.\qed
+For the other inequality, let $a+1=\bar a2^c$ for some $\bar a$ odd and $c>0$: then
+$(x')_\prime=(\bar a-1)2^c2^b=(a+1-2^c)2^b\leq(a-1)2^b=x_\prime$, again because $c>0$.\qed
 \end{proof}
 
 \begin{lemma}
@@ -550,7 +582,7 @@ for $a,\bar a$ odd, we have $y'=(a+1)2^b<\bar a2^b=x$.  \qed
 	Given a positive integer $r$, let $a_0=0$, and $a_{k+1}$ be the 2-fattest
 	number in $[a_k+1\..r]$. Then
 	$\{\?a_0,a_1,\dots,a_t=r\?\}=\{\?r_{(n)} \mid n \geq 0\?\}$.
-	Morevoer, $t$ is equal to the number of ones in the binary expansion of $r$.
+	Moreover, $t$ is equal to the number of ones in the binary expansion of $r$.
 \end{lemma}
 \begin{proof}
 First note that $0$ belongs to both sets. Now let
@@ -563,6 +595,11 @@ number in the interval $[r-r \bmod 2^{p_i}+1\..r]$; observing that $r=\sum_j
 2^{p_j}$, we deduce that $a_{i+1}=r-r \bmod 2^{p_{i+1}}$. The thesis follows
 easily.\qed
 \end{proof}
+
+Note that, as a consequence of Lemma~\ref{lemma:twofateq}, a number $m\leq r$ is a backjump of $r$
+(i.e., $m=r_{(n)}$ for some $n\geq 0$) if and only if $m$ is the 2-fattest number in $[m\..r]$:
+indeed, each $a_{k+1}$ is 2-fattest in $[a_k+1\..r]$ and thus in $[a_{k+1}\..r]$; conversely, if $m>0$ is 2-fattest 
+in $[m\..r]$ and $a_k<m\leq a_{k+1}$, then $a_{k+1}$, being 2-fattest in $[a_k+1\..r]\supseteq[m\..r]$, must be equal to $m$.
 
 \begin{lemma}[Parenthesis property]
 \label{lemma:paren}
@@ -627,7 +664,7 @@ $\epsilon$& $\to$ & root\\
 \end{tabular}}\qquad
 \end{tabular}
 }
-\caption{\label{fig:ztrie}(above) A compacted trie for $\{\?001001010,0010011010010,00100110101\?\}$,
+\caption{\label{fig:ztrie}A compacted trie for $\{\?001001010,0010011010010,00100110101\?\}$,
 and the corresponding nomenclature and dictionary. The handles of the two internal nodes are delimited
 by dashed lines. The example string $00100100$ exits on the left.}
 \end{figure}
@@ -638,16 +675,19 @@ by dashed lines. The example string $00100100$ exits on the left.}
 	stored at $\alpha$;
 	\item $n_\alpha$, the \emph{name of node $\alpha$}, is defined recursively as
 	follows: the name of the root is $\epsilon$, and if $\alpha$ is the $t$-child
-	of $\beta$ (where $t \in 2$), then $n_\alpha=n_\beta c_\beta  t$
+	of $\beta$ (where $t \in 2$), then $n_\alpha=n_\beta c_\beta  t$;
 	\item $e_\alpha$, the \emph{extent of node $\alpha$}, is defined as $e_\alpha=n_\alpha c_\alpha$;
 	it is the longest common prefix of the strings represented by the leaves 
 	that are descendants of $\alpha$; note that if $\alpha$ is the $t$-child
-	of $\beta$ (where $t \in 2$), then $n_\alpha=e_\beta t$
+	of $\beta$ (where $t \in 2$), then $n_\alpha=e_\beta t$;
 	\item given a string $x$, we let $\exit x$ be the exit node of $x$, that is,
-	the only node $\alpha$ such that $n_\alpha \preceq x$ and either $e_\alpha=x$ or $e_\alpha$
-	is not a prefix of $x$; moreover, we call \emph{parex node of $x$} the
+	the only node $\alpha$ such that $n_\alpha \preceq x$ and either $\alpha$ is a leaf or $e_\alpha$
+	is not a proper prefix of $x$ (in other words, the last node on the path we follow when 
+	searching for $x$ in the trie; note that $x$ is not required to be prefix-free with $S$: 
+	it can be a proper prefix of an element of $S$, or have an element of $S$ as a proper prefix,
+	in which case its exit node is the corresponding leaf); moreover, we call \emph{parex node of $x$} the
 	\emph{parent} of the exit node of $x$, or a special symbol $\bot$ if the exit
-	node of $x$ is the root (note that the parex of $x$ is the node with the
+	node of $x$ is the root (note that the parex of $x$ is the internal node with the
 	longest extent that is a \emph{proper} prefix of $x$);
 	\item the \emph{skip interval} $[i_\alpha\..j_\alpha]$ associated to
 	$\alpha$ is $[|n_\alpha|\..|e_\alpha|]$ (note that the left extreme is
@@ -655,11 +695,13 @@ by dashed lines. The example string $00100100$ exits on the left.}
 	\item we say that $x$ \emph{exits on the left} if $x \preceq e_{\exit x}$, or if $x$ and $e_{\exit x}$ 
 	are $\preceq$-incomparable,
 	and the first bit of $x$ after the longest common prefix with $e_{\exit x}$ is a 0; we say $x$ \emph{exits
-	on the right} otherwise.
+	on the right} otherwise (that is, if $x$ and $e_{\exit x}$ are $\preceq$-incomparable 
+	and the first bit of $x$ after the longest common prefix is a 1, or if
+	$\exit x$ is a leaf and $e_{\exit x}\prec x$).
 \end{itemize}
 
 Every node $\alpha$ stores the extremes $i_\alpha$ and $j_\alpha$ of its skip interval, and its
-own extent $e_\alpha$ (which is an element of $S$ on leaves); as usual, internal nodes contains two pointers to children.
+own extent $e_\alpha$ (which is an element of $S$ on leaves); as usual, internal nodes contain two pointers to children.
 
 \subsection{The z-map}
 
@@ -673,8 +715,8 @@ properties of this mapping (in particular, its r\^ole in the discovery of
 We start by associating with every node of the trie a string called its ``handle'':
 
 \begin{definition}[handles] 
-\label{def:twofattest}
-The \emph{handle} $h_\alpha$ of a node $\alpha$ is the prefix of $e_\alpha$ whose length is 2-fattest number in the skip interval of $\alpha$
+\label{def:handles}
+The \emph{handle} $h_\alpha$ of a node $\alpha$ is the prefix of $e_\alpha$ whose length is the 2-fattest number in the skip interval of $\alpha$
 (see Figure~\ref{fig:ztrie}).
 \end{definition}
 Since zero is the 2-fattest number in every interval containing it, the handle of the root is always
@@ -711,14 +753,17 @@ ancestors} are the nodes $\beta$ such that $h_\beta \in
 \{\?e_\alpha[0\..|h_\alpha|_{(n)}) \mid n\geq 0\?\}$.
 \end{definition}
 The above definition may seem a bit cryptic: the idea is that we consider the
-nodes on the path leading to $\alpha$ whose handle lengths are at least as fat
-as $|h_\alpha|$. Note that not all handles in the definition above necessarily
-exists, except for the last one, which is of course $\epsilon$---the handle of
-the root.
+nodes $\beta$ on the path leading to $\alpha$ ($\alpha$ included) whose handle length is fatter than 
+every larger number up to $|h_\alpha|$, that is, such that $|h_\beta|$ is the 2-fattest 
+number in $[|h_\beta|\..|h_\alpha|]$ (see the remark after Lemma~\ref{lemma:twofateq}). 
+Note that not all the strings in the definition above are necessarily handles of a node,
+except for the first one, which is $h_\alpha$, and for the last one, which is of course $\epsilon$---the handle of
+the root. We will always list the 2-fat ancestors of a node in order of increasing handle length, 
+that is, from the root down to the node itself.
 
 2-fat ancestors will not be used in the simple z-fast trie, but they will be
 essential in maintaining the additional pointers we will describe in Section~\ref{sec:jumppointers}.
-To avoid duplication, we include their discovery in the algorithms that follows, even
+To avoid duplication, we include their discovery in the algorithms that follow, even
 if, technically, they are not needed in the case of simple z-fast tries. 
 
 
@@ -758,19 +803,22 @@ execution, the stack contains $\parex x$ (on the top) and its
 2-fat ancestors; if $x$ exits at the root, the algorithm returns the empty stack.}
 \end{Algorithm}
 
-Intuitively, Algorithm~\ref{algo:parex} works as follows: initially, it queries the Z-map
-for the empty string, as $0$ is 2-fattest in all intervals, obtaining the root; afterwards, assuming $w$ \todo{Who is $w$, here? Should we say $w=|x|?$ and possibly use a different letter?} is a power of two,
-it will query the Z-map with $x$, as now $w$ is the $2$-fattest number in $[1\..w]$, obtaining $\bot$, as leaves are not in the Z-map.
+Intuitively, Algorithm~\ref{algo:parex} works as follows: initially, it queries the z-map
+for the empty string, as $0$ is 2-fattest in all intervals, obtaining the root. Assume now for simplicity
+that the extent of the root is a proper prefix of $x$ but it is shorter than $|x|/2$, and that $m=|x|$ is a power of two: then 
+the algorithm will query the z-map with $x$ itself, as $m$ is the $2$-fattest number in $[|e_{\mathrm{root}}|+1\..m]$, and the test will fail,
+as no extent can be a proper prefix of $x$ and have $x$ as a prefix at the same time.
 More interestingly, now Algorithm~\ref{algo:parex}  
- will query the Z-map with $x[0\.. w/2)$, the prefix of $x$ of length $w/2$.
+ will query the z-map with $x[0\.. m/2)$, the prefix of $x$ of length $m/2$.
  
-Now, if there is a string in $S$ having $x[0\.. w/2)$ as prefix,
-there must be a node $\alpha$ with an extent starting with $x[0\.. w/2)$: but $\alpha$ has necessarily $x[0\.. w/2)$ as handle,
-because $w/2$ is 2-fattest in any subinterval of $[1\..w-1]$ that contains it. We can now move to the interval $[|e_\alpha|+1\..w]$ and continue in the
+Now, if there is a node $\alpha$ whose extent is a proper prefix of $x$ and whose skip interval contains $m/2$,
+then $\alpha$ has necessarily $x[0\.. m/2)$ as handle,
+because its skip interval is a subinterval of $[1\..m-1]$, and $m/2$ is 2-fattest in any such subinterval that contains it.
+We can now move to the interval $[|e_\alpha|+1\..m-1]$ and continue in the
 same way.
 
-If, however, there is no string in $S$  having $x[0\.. w/2)$ as prefix, we try again with
-$[0\.. w/4)$.
+If, however, there is no such node, the test fails, and we try again with
+$x[0\.. m/4)$.
 
 To prove formally the correctness of Algorithm~\ref{algo:parex}, let us define the
 \emph{cutpoint} for a string $x$ with respect to a trie as the length of the
@@ -783,46 +831,52 @@ of $x$.
 
 \begin{theorem}
 \label{th:parex}
-Let $x$ be a nonempty string, and 
-$\eta=\parex x$.
-Let 
+Let $x$ be a nonempty string such that $\eta=\parex x\neq\bot$, and let 
 $\alpha_0$,~$\alpha_1$, $\dots\,$,~${\alpha}_{t}=\eta$
-be the sequence of 2-fat ancestors of $\eta$ (the emtpy sequence if $\eta=\bot$)\todo{We should say how they are ordered (``in increasing handle-length order'')}.
+be the sequence of 2-fat ancestors of $\eta$ (in increasing handle-length order).
 Let $[a\..b]$ be the interval maintained by 
   Algorithm~\ref{algo:parex}. After each iteration the following
-  invariant is satisfied: $a=|e_{\alpha_j}|+1$ for some $j$ and $|h_\eta|\leq b$; moreover 
+  invariant is satisfied: $a=|e_{\alpha_j}|+1$ for some $j$, the stack contains \lst\alpha j
+  (with $\alpha_j$ on the top), and $|h_\eta|\leq b$; moreover 
   all values $|e_{\alpha_j}|+1$ are attained by $a$
-  (in order of increasing $j$) at some point of the execution.
+  (in order of increasing $j$) at some point of the execution. If instead $\parex x=\bot$, 
+  the algorithm returns the empty stack.
 \end{theorem}
 \begin{proof}
 Let $\sigma$ be the node such that $h_\sigma$ is the longest handle in $Z$ that is a prefix of $x$:
 note that either $\sigma=\eta$ (if $x$ cuts high or $\exit x$ is a leaf), or $\sigma=\exit x$ and
 it is one of the children of $\eta$.  
 
-The first value of $f$ is necessarily zero, so at the first execution $\beta$ is the root node;
-if $e_\beta\not\prec x$, the exit node is the root (and we proceed correctly because we set $b=-1$ and immediately
-exit the loop, returning the emtpy stack); conversely, if $e_\beta\prec x$, the invariant is true at the end of the first iteration (we set $a=|e_{\mathrm{root}}|+1$),
-and we correctly push the root on the stack (the root is a fat ancestor of every other node).
+The first value of $f$ is necessarily zero, so at the first iteration $\beta$ is the root node 
+(or $\bot$, if the trie is made of a single leaf);
+if $\beta=\bot$ or $e_\beta\not\prec x$, the exit node is the root (and we proceed correctly because we set $b=-1$ and immediately
+exit the loop, returning the empty stack); conversely, if $e_\beta\prec x$, the invariant is true at the end of the first iteration (we set $a=|e_{\mathrm{root}}|+1$),
+and we correctly push the root on the stack (the root is a 2-fat ancestor of every other node).
 
 We now prove by induction that in the rest of execution the invariant is true.
 At each step we pick the
 $2$-fattest number $f\in[|e_{\alpha_i}|+1\..b]$, and change interval. Let
-$\beta=Z(x[0\..f))$. We have three cases:
+$\beta=Z(x[0\..f))$. Note that a prefix of $x$ of length $f$ can only be the handle of the
+node on the path from the root to $\exit x$ whose skip interval contains $f$, if any. 
+We have three cases:
 \begin{itemize}
-  \item If $f\leq |h_\eta|$, $x[0\..f)$
-  must be the handle of a node $\beta$, as $f$ is
-  2-fattest in
-  $[|e_{\alpha_i}|+1\..b]\supseteq[|e_{\alpha_i}|+1\..|h_\eta|]$.
-  Moreover, necessarily $\beta=\alpha_{i+1}$ because of Lemma~\ref{lemma:twofateq},
-  and $e_\beta\prec x$ (because $\beta$ is an ancestor of $\eta=\parex x$). Thus, the algorithm sets
-  $a=|e_\beta|+1=|e_{\alpha_{i+1}}|+1$ the invariant is preserved.
-  \item If $|h_\sigma|<f$, necessarily 
-  $\beta=\bot$. Thus, by setting $b=f-1\geq|h_\sigma|\geq |h_\eta|$  we
+  \item If $f\leq |h_\eta|$, let $\beta$ be the ancestor of $\eta$ (possibly $\eta$ itself) whose skip interval contains $f$.
+  Since $f$ is 2-fattest in
+  $[|e_{\alpha_i}|+1\..b]\supseteq[|e_{\alpha_i}|+1\..|h_\eta|]$, it is 2-fattest also in the part of the 
+  skip interval of $\beta$ contained therein, which includes $|h_\beta|$: thus, $f=|h_\beta|$ and $Z(x[0\..f))=\beta$.
+  Moreover, $f$ is 2-fattest in $[f\..|h_\eta|]$, so by the remark after Lemma~\ref{lemma:twofateq} $\beta$ is a 2-fat ancestor of $\eta$,
+  and for the same reason no number in $[|e_{\alpha_i}|+1\..f)$ is the length of the handle of a 2-fat ancestor of $\eta$: 
+  hence, $\beta=\alpha_{i+1}$.
+  Finally, $e_\beta\prec x$ (because $\beta$ is an ancestor of $\eta=\parex x$). Thus, the algorithm sets
+  $a=|e_\beta|+1=|e_{\alpha_{i+1}}|+1$, pushes $\alpha_{i+1}$ on the stack, and the invariant is preserved.
+  \item If $|h_\sigma|<f$, necessarily
+  $\beta=\bot$ by the definition of $\sigma$. Thus, by setting $b=f-1\geq|h_\sigma|\geq |h_\eta|$  we
   preserve the invariant.
   \item The last case is when $|h_\eta|< f\leq |h_\sigma|$, which can only occur if $\sigma=\exit x$ is
-  internal and $x$ cuts low. If $f$ belongs to the skip interval of $\eta$, we query $Z$ with something
-  that is not a handle, so we get $\beta=\bot$. Otherwise, necessarily $f=h_\sigma$ hence we get $\beta=\sigma$ 
-  but either $e_\sigma=x$ or $e_\sigma \not\preceq x$. In all cases, we set $b=f-1\geq |h_\eta|$
+  internal and $x$ cuts low. If $f$ belongs to the skip interval of $\eta$, or to the skip interval of $\sigma$ 
+  but $f\neq|h_\sigma|$, we query $Z$ with something
+  that is not a handle, so we get $\beta=\bot$. Otherwise, $f=|h_\sigma|$, hence we get $\beta=\sigma$,
+  but $e_\sigma$ is not a proper prefix of $x$ by the definition of exit node. In all cases, we set $b=f-1\geq |h_\eta|$
   and preserve the invariant.       
   \qed
 \end{itemize}
@@ -846,16 +900,20 @@ the vertical line indicates the position $f$, whereas the dashed lines refer to 
 
 A few remarks are in order:
 \begin{itemize}
-  \item Algorithm~\ref{algo:parex} completes in at most $\lg|x|$ iterations.
+  \item Algorithm~\ref{algo:parex} completes in at most $\lfloor\lg|x|\rfloor+2$ iterations: 
+  the first iteration has $f=0$; after that, the 2-fattest number in the current interval
+  is at most $|x|$, so it has at most $\lfloor\lg|x|\rfloor$ trailing zeroes, and at each iteration 
+  the number of trailing zeroes of $f$ decreases, because the new interval is a subinterval of the previous one that 
+  does not contain $f$.
   \item At the end of Algorithm~\ref{algo:parex}, the returned stack contains
   all and only the 2-fat ancestors of $\eta$ in increasing handle-length order (the empty
-  stack if $\eta=\bot$).
+  stack if $\eta=\bot$): indeed, at the end $a>b\geq|h_\eta|$, so the last value attained by $a$ is $|e_\eta|+1$.
   \item The exit node of $x$ can easily be recovered in constant
-time from the output of Algorithm~\ref{algo:parex}:
+time from the output of Algorithm~\ref{algo:parex}: if the stack is empty, the exit node is the root; otherwise,
 if $\eta=\parex x$ then the exit node is the left or right child of $\eta$, depending on 
-wheter $x[|e_\eta|]$ is a 0 or a 1.
+whether $x[|e_\eta|]$ is a 0 or a 1.
   \item To perform deletions, we will need to compute the parent of the parex node: if it
-  cannot be found on the stack just above the parex node, it can be computed by running
+  cannot be found on the stack immediately below the parex node, it can be computed by running
    Algorithm~\ref{algo:parex} on the name of the parex node (but see Section~\ref{sec:reusing} for an approach that is better in practice).
 \end{itemize}
 
@@ -866,7 +924,8 @@ Theorem~\ref{th:parex} implies that the simple z-fast trie achieves the bound of
 one can just locate the exit node of $x$ and check that it is a leaf and its extent is equal to $x$. We now discuss how to perform updates.
 
 To insert a new string $x$ into the z-fast trie, we first locate the parex and
-exit node of $x$ using Algorithm~\ref{algo:parex}.
+exit node of $x$ using Algorithm~\ref{algo:parex} (throughout the discussion of insertions,
+$\exit x$ and $\parex x$ denote the exit and parex node of $x$ in the trie \emph{before} the insertion).
 As a guiding example, we show in Figure~\ref{fig:large-example-new} the trie
 obtained adding the single string $0111010111100101110$ to the trie of
 Figure~\ref{fig:large-example} (the changed nodes involved in the insertion are
@@ -900,16 +959,19 @@ The other internal node has a brand new handle, that should be inserted in the d
 
 In the example of Figure~\ref{fig:large-example-new}, $x$ cuts high, hence the old handle ($h_{\alpha_5}=011101011111$) still
 points to the same node as before. The new handle is the handle of $\beta$, that is,
-$011101011$.
+$0111010111$.
 
 Deletions can be performed running backwards the insertion algorithm: to do so, one needs
-the exit node, the parex , and the grandparent of the exit node. Then a single pointer
-assignment to the latter node updates the trie structure: in Figure~\ref{fig:large-example},
+the exit node (which is the leaf containing $x$), the parex, and the grandparent of the exit node. Then a single pointer
+assignment to the latter node updates the trie structure: in Figure~\ref{fig:large-example-new},
 when removing the new leaf we would set the right child pointer of $\alpha_1$ to $\alpha_5$,
 and update the name of $\alpha_5$ accordingly. 
 
-For what concerns the z-map, if the sibling of the exit node is internal and $x$ cuts low
-we have to first remove the sibling, and then use it to replace the parex, as the new handle
+For what concerns the z-map, the sibling of the exit node takes the place of the parex, and its skip interval
+becomes the union of its own skip interval and of that of the parex: the 2-fattest number in the union is the fatter
+between the lengths of the handles of the two nodes. If the sibling is internal and the fatter one is the length of the handle of the parex (this
+is exactly the case in which reinserting $x$ would cut low)
+we have to first remove the sibling from the z-map, and then use it to replace the parex, as the new handle
 of the sibling will be identical to the handle of the parex. Otherwise,
 we just need to remove the parex.
 
@@ -917,7 +979,7 @@ Update bounds are trivially satisfied, as we have to update the compacted trie a
 which can be performed within the bounds of Theorem~\ref{th:bounds} using standard techniques (note that for deletions
 it is essential to recover the parex node).
 
-\subsection{Space usage}
+\subsection{Avoiding the storage of strings}
 \label{sec:space}
 
 From the description given in the previous sections, 
@@ -928,11 +990,11 @@ no difference in the space usage, but in practice
 while this might be acceptable for very short strings (i.e., integers),
 it would be a problem for longer strings, and in particular for the signed version we will discuss in Section~\ref{sec:sign}, 
 in which strings can be of length up to $2^w$.
-We thus briefly describe how reduce the amount of data stored at each node, and in particular how to avoid storing additional
+We thus briefly describe how to reduce the amount of data stored at each node, and in particular how to avoid storing additional
 strings at all.
 
-First of all, it is not necessary to store both extremes skip intervals: 
-it is enough to store its left extremes, because the
+First of all, it is not necessary to store both extremes of skip intervals: 
+it is enough to store left extremes, because the
 right extreme of an internal node can be deduced from any of its children.
 
 Second, we do not actually need to store handles in the dictionary: since every handle
@@ -946,8 +1008,11 @@ in the leaves. Thus, we can just store in each internal node a reference to one
 (any will do) of its descendant leaves. It is easy to make this relation between
 internal nodes and leaves an injection (i.e., different nodes always point to
 different leaves); by storing also in the leaf a backward reference it is
-possible to perform insertions and deletions with few additional pointers assignment:
-on insertion, a new leaf will be the reference leaf for the newly inserted parent node, whereas on removal\todo{???}. 
+possible to perform insertions and deletions with few additional pointer assignments:
+on insertion, the new leaf will be the reference leaf for the newly inserted parent node, whereas on removal
+the reference leaf of the parex node, which is deleted together with the leaf, becomes available: thus, if the deleted
+leaf is the reference leaf of a node other than the parex (necessarily one of its ancestors), we assign to that node
+the reference leaf of the parex. 
 Combining these three
 considerations, beyond the space necessary to
 store $S$, we just need a few words per node.
@@ -957,7 +1022,7 @@ store $S$, we just need a few words per node.
 
 We now introduce the idea of replacing extents of internal nodes with fixed-length \emph{signatures}; the resulting
 data structure, the simple \emph{signed} z-fast trie, can store strings of length at most $2^w$ and
-perform membership queries and updates within the bounds of Theorem~\ref{th:bounds} with high probability.
+perform membership queries within the bounds of Theorem~\ref{th:boundslong}.
 
 \subsection{Locating exit/parex without prefix check}
 \label{sec:exitorparex}
@@ -971,7 +1036,7 @@ property:
 \begin{algorithmic}
 \STATE{\textbf{Function: } LocateExitOrParex}
 \STATE{\textbf{Input:} a string $x$}
-\STATE{\textbf{Output:} either $\exit x$ or $\parex x$} 
+\STATE{\textbf{Output:} a stack containing the 2-fat ancestors of either $\exit x$ or $\parex x$} 
 \STATE $\Sigma\leftarrow\text{empty stack}$
 \STATE $a, b\leftarrow 0,|x|$
 \WHILE{$a \leq b$}
@@ -1006,7 +1071,8 @@ $\exit x$ is a leaf}\\
 \]
 Let 
 $\alpha_0$,~$\alpha_1$, $\dots\,$,~${\alpha}_{t}=\sigma$
-be the sequence of 2-fat ancestors of $\sigma$ (in increasing handle-length order).
+be the sequence of 2-fat ancestors of $\sigma$ (in increasing handle-length order; we assume $\sigma\neq\bot$, that is, 
+that the trie is not made of a single leaf).
 Let $[a\..b]$ be the interval maintained by 
   Algorithm~\ref{algo:exitorparex}. After each iteration the following
   invariant is satisfied: $a=|e_{\alpha_j}|+1$ for some $j$ and
@@ -1059,37 +1125,40 @@ alike, but diverge after hitting the exit node $\alpha_5$.}
 
 A few remarks are in order:
 \begin{itemize}
-  \item Algorithm~\ref{algo:exitorparex} completes in at most $\lg|x|$ iterations, like
+  \item Algorithm~\ref{algo:exitorparex} completes in at most $\lfloor\lg|x|\rfloor+2$ iterations, like
   Algorithm~\ref{algo:parex}, but requires no string comparison.  
     \item As in the case of Algorithm~\ref{algo:parex}, at the end of Algorithm~\ref{algo:exitorparex} the returned stack contains
-  all and only the 2-fat ancestors of $\sigma$ in increasing handle-length order (the empty
-  stack if $\sigma=\bot$).
+  all and only the 2-fat ancestors of $\sigma$ in increasing handle-length order. Note that if the root is an
+  internal node it is always pushed on the stack: the returned stack is empty only when $\sigma=\bot$, which
+  happens only when the trie is made of a single leaf.
   \item Given the output of Algorithm~\ref{algo:exitorparex}, it is possible to 
   obtain the exit node as follows: if the output is the empty stack, $\exit x$ is the root;
-  otherwise the exit node can be obtained by the LocateExit function described in Algorithm~\ref{algo:exit}.
-  The function first checks if the node is the parex or the exit node, and in the former case uses
+  otherwise the exit node can be obtained from the node $\sigma$ on the top of the stack as in the LocateExit function described in Algorithm~\ref{algo:exit}.
+  The function first checks if $\sigma$ is the parex or the exit node, and in the former case uses
   one bit of $x$ to access the correct child.
 \end{itemize}
 
 \begin{Algorithm}
 \begin{algorithmic}
 \STATE{\textbf{Function: } LocateExit}
-\STATE{\textbf{Input:} a string $x$ and the node $\sigma$ on the top of the stack produced by Algorithm~\ref{algo:exitorparex}.}
+\STATE{\textbf{Input:} a string $x$}
 \STATE{\textbf{Output:} $\exit x$} 
-\IF{$\sigma=\bot$}
+\STATE{$\Sigma\leftarrow\text{LocateExitOrParex}(x)$}
+\IF{$\Sigma$ is empty}
 	\STATE{{\bf return} the root}
 \ENDIF
+\STATE{$\sigma\leftarrow\text{top}(\Sigma)$}
 \IF{$e_\sigma\prec x$}
 	\IF{$x[|e_\sigma|]=0$}
-		\STATE{{\bf return} the left child of $\eta$}
+		\STATE{{\bf return} the left child of $\sigma$}
 	\ELSE
-		\STATE{{\bf return} the right child of $\eta$}
+		\STATE{{\bf return} the right child of $\sigma$}
 	\ENDIF
 \ELSE
-	\STATE{{\bf return} $\eta$}
+	\STATE{{\bf return} $\sigma$}
 \ENDIF
 \end{algorithmic}
-\caption{\label{algo:exit}This function locates the exit node of $x$, given the output of Algorithm~\ref{algo:exitorparex}.}
+\caption{\label{algo:exit}This function locates the exit node of $x$ using Algorithm~\ref{algo:exitorparex}.}
 \end{Algorithm}
 
 
@@ -1116,22 +1185,25 @@ $Z\bigl(x[0\..f_i)\bigr)=\beta_i\neq\bot$, if $\beta_k$
 is not a false positive then this is also true for each $\beta_i$, $0\leq i<k$.
 \end{theorem}
 \begin{proof}
-We assume without loss of generality that the length of the handle of a false positive
+We assume that the length of the handle of a false positive
 is equal to the length of the key.\footnote{If you have a $Z'$ that may sometimes return false positives $\beta$ with
-$|h_\beta|\neq f$, just define a new $Z$ that behaves exactly like $Z'$, but in those cases returns $\bot$, instead.} 
+$|h_\beta|\neq f$, just define a new $Z$ that behaves exactly like $Z'$, but in those cases returns $\bot$, instead.
+Note that this filter is necessary: it guarantees that $|e_\beta|\geq f$ whenever $Z$ does not return $\bot$, so that
+the interval $[a\..b]$ shrinks at each iteration and the algorithm terminates.} 
 
 Note that $f_0<f_1<\cdots<f_k$ (by the way we change the value of $a$ when $Z$ does not return $\bot$
-and by our assumption $|e_\beta|\geq |h_\beta|=f$).
-If the $k$-th call to $Z$ was not a false positive we have
-\[
-x[0\..f_i) \preceq x[0\..f_k) = x\bigl[0\..|h_{\beta_k}|\bigr) =
-h_{\beta_k}\preceq x,
-\]
-so $f_i\leq f_k=|h_{\beta_k}|\leq|h_\sigma|$ (because of the very definition of
-$\sigma$ in the statement of Theorem~\ref{th:exitorparex}, as the node with the longest
-handle that is a prefix of $x$). Thus, the second case ($f>|h_\sigma|$) in
-the proof of Theorem~\ref{th:exitorparex} never occurred in the steps preceding the $k$-th, 
-and each $x[0\..f_i)$ is a handle, so each $\beta_i$ is a true positive.\qed
+and by our assumption $|e_\beta|\geq |h_\beta|=f$). Recall that the node $\sigma$ of Theorem~\ref{th:exitorparex}
+is the node with the longest handle that is a prefix of $x$.
+If the $k$-th call to $Z$ was not a false positive, $x[0\..f_k)$ is a handle, so
+$f_k\leq|h_\sigma|$.
+
+Suppose now by contradiction that some $\beta_i$ with $i<k$ is a false positive, and take the smallest such $i$.
+Since $Z$ is always correct on handles, and returns $\bot$ only on strings that are not handles, 
+up to the iteration in which $\beta_i$ is returned the algorithm behaves exactly as with a z-map without false positives:
+in particular, at the start of that iteration the invariant of Theorem~\ref{th:exitorparex} holds.
+If we had $f_i\leq|h_\sigma|$, by the first case of 
+the proof of Theorem~\ref{th:exitorparex} the string $x[0\..f_i)$ would be a handle, and $\beta_i$ would not be 
+a false positive. Thus, $f_i>|h_\sigma|\geq f_k$, contradicting $f_i<f_k$.\qed
 \end{proof}
 
 In other words, after the first false positive is obtained, the following calls will always yield
@@ -1163,13 +1235,18 @@ preprocessing using time $O(|x|/w)$ and $O(|x|/B)$ I/Os, computing a signature
 for an arbitrary prefix of $x$ takes constant time.
 
 Assuming we have signatures of length $c\lg n + \lg w$, 
-it is easy to see that the probability of performing $w$ probes (we will do at most
-$w$ probes on input $|x|$, because $\lg |x| \leq \lg 2^w=w$)
-without getting a false positive is at least $1-1/n^{c-1}$: 
+it is easy to see that the probability of completing a query (which performs at most
+$w+2$ probes on input $x$, because $\lg |x| \leq \lg 2^w=w$)
+without getting a false positive is at least $1-3/n^{c-1}$: 
 indeed,  the probability that a given prefix induces a false positive 
-is at most $n/(wn^c)$ (by a union bound), so hitting a false positive during a query
-(i.e., any of the at most $w$ tests) 
-of a false positive is at most $1/n^{c-1}$.
+is at most $n/(wn^c)$ (by a union bound on the signatures of the at most $n$ handles), so the 
+probability of hitting a false positive in any of the at most $w+2\leq 3w$ probes of a query
+is at most $3/n^{c-1}$.
+\todo[inline]{The analysis above assumes fully random signatures, but at the same time that, after preprocessing,
+the signature of an arbitrary prefix of $x$ can be computed in constant time: the two requirements 
+are not compatible as stated. We should name a concrete family of hash functions with constant-time prefix 
+signatures (e.g., a polynomial or a CRC-like rolling hash) and redo the collision bound 
+for that family, or state the bound under an explicit idealized assumption.}
 
 Thus,
 Algorithm~\ref{algo:exitorparex} will end with the correct output in time $O(|x|/w +\lg|x|)$ with
@@ -1177,25 +1254,34 @@ high probability, because of Theorem~\ref{th:errors}. Note that since $n$ is not
 must actually be $cw+\lg w=O(w)$ bits long (we assume, as usual, that the set
 size is at most $2^w$, so $c\lg n\leq cw$).
 
-At the end of the algorithm, we just need to check if $h_\beta\preceq x$
+At the end of the algorithm, we just need to check if $h_\beta\preceq x$, where $\beta$ is the node
+on the top of the stack,
 to see if the result is correct (which we can do in time $O(|x|/w)$). 
-Otherwise, we re-run the algorithm using actual keys
-instead of signatures if something went wrong (this requires time
+If the check fails, we re-run the algorithm comparing actual handles
+instead of signatures (this requires time
 $O((|x|/w+1)\lg|x|)$ and $O((|x|/B+1)\lg|x|)$ I/Os). 
 
 \paragraph{Duplicate signatures.} 
-Duplicate signatures require some attention: if two existing handles have the same signatures, we must somehow
-record that whenever \emph{that} signature is queried for, the actual prefix must be compared in order to determine
-which node should be returned. 
+Duplicate signatures require some attention: if two existing handles have the same signature, we must
+record that whenever \emph{that} signature is queried for, the actual prefix must be compared with the handles in order to determine
+which node should be returned (if any), as otherwise the dictionary might return the wrong node on an existing handle. 
+A simple way to do so in an open-addressing table is to reserve one bit of each stored signature as a \emph{duplicate mark},
+maintaining the following invariant: among the entries with the same signature, all but the last one along the
+probe sequence are marked. A query that finds an unmarked entry with the signature it is looking for returns the associated node
+without further ado; when it finds a marked entry, it compares the prefix with the handle of the associated node, 
+returning the node if they are equal and continuing the scan otherwise. When a new handle is inserted, all 
+entries with the same signature met along the probe sequence are marked; when the only unmarked entry with a given signature is deleted, the 
+mark of the last entry with that signature preceding it in the probe sequence, if any, is cleared.
+
 This means that if during the execution of Algorithm~\ref{algo:exitorparex} we try to query the map with an
-existing but duplicate signature, an explicit comparison will be needed. With the same analysis as above, 
+existing but duplicate signature, an explicit comparison, requiring time $O(|x|/w)$, will be needed. With the same analysis as above, 
 we obtain that the probability of hitting a duplicate signature during the execution of the
-algorithm is at most $1/n^{c-1}$. So the probability that we have to re-run the algorithm using 
-the actual keys because of duplicate signatures is at most $1/n^{c-1}$.
+algorithm is at most $3/n^{c-1}$.
 
 \smallskip
-Summarizing the two cases above, with probability at least $1-2/n^{c-1}$ there will be no need to run the algorithm on actual keys,
-because neither false positive nor duplicate keys will be met. 
+Summarizing the two cases above, with probability at least $1-6/n^{c-1}$ a query will neither perform explicit comparisons
+during the search nor need to re-run the algorithm on actual handles,
+because neither false positives nor duplicate signatures will be met. 
 
 
 \section{Jump pointers}
@@ -1217,7 +1303,7 @@ pointer goes depends on some arithmetics related to 2-fattest numbers. Our goal
 is to position jump pointers so that if the rightmost (largest) leaf under node
 $\alpha$ contains the string $x$, in $O(\lg|x|)$ steps we can get to that leaf. At
 the same time, when we perform insertions or deletions we want to be
-able to update the pointers in time $O(\lg|e_{\exit x}|)$, where $x$ is the
+able to update the pointers in time logarithmic in the length of $x$, of its predecessor and of its successor, where $x$ is the
 string added to/removed from the trie.
 We start with a definition.
 
@@ -1229,12 +1315,17 @@ extreme. Given an internal node $\alpha$, its \emph{left (right) jump pointer}
 points to its unique left (right) descendant that intercepts $|h_\alpha|'$.
 \end{definition}
 
+The definition is well given: since $|h_\alpha|$ is the 2-fattest number in the skip interval of $\alpha$, and 
+$|h_\alpha|'$ is larger and fatter than $|h_\alpha|$, we have $|h_\alpha|'>j_\alpha$. The skip intervals of the left (right) descendants of $\alpha$
+are consecutive, starting from $j_\alpha+1$, and the path of left (right) descendants ends in a leaf,
+which intercepts all remaining numbers, so exactly one left (right) descendant intercepts $|h_\alpha|'$.
+
 The intuition behind this definition is that jump pointers point near for nodes
 with lean handles, and point far for nodes with fat handles. Of course,
 since when we follow a jump pointer of $\alpha$ we land into a node $\beta$
-whose skip interval contains $|h_\alpha|'$, the handle of node
+whose skip interval contains $|h_\alpha|'$ (unless $\beta$ is a leaf), the handle of node
 $\beta$ will have strictly fatter length than $|h_\alpha|$: as a consequence, 
-we never need more than $\lg|x|$ jumps to reach the leaf containing the string
+we never need more than $\lfloor\lg|x|\rfloor+1$ jumps to reach the leaf containing the string
 $x$. Note that, in particular, the left and right jump pointers of the root 
 point to the first and last element in $S$.
 Figure~\ref{fig:bigtrie} shows a graphical display of a sample z-fast trie
@@ -1260,16 +1351,18 @@ If $x$ exits on the right, then it is larger than the rightmost leaf of $\exit x
 and smaller than every leaf following it.
 \end{lemma}
 \begin{proof}
-If $x$ exits on the left, then either $x \preceq e_{\exit x}$ or $x$ and $e_x$ are $\preceq$-incomparable and the 
-bit of $x$ after the longest common prefix is a $0$: in both cases, $x$ is smaller than every leaf under $\exit x$. 
-Moreover, $x$ is larger than the previous leaves because of the definition of exit node.
+If $x$ exits on the left, then either $x \preceq e_{\exit x}$ or $x$ and $e_{\exit x}$ are $\preceq$-incomparable and the 
+bit of $x$ after the longest common prefix is a $0$: in both cases, $x$ is smaller than or equal to every leaf under $\exit x$
+(equality is possible only if $\exit x$ is a leaf and $x=e_{\exit x}$). 
+Moreover, $x$ is larger than the previous leaves because of the definition of exit node: since $n_{\exit x}\preceq x$,
+at every ancestor of $\exit x$ the string $x$ follows the same child as $\exit x$, and the leaves preceding those 
+under $\exit x$ are exactly those that follow a left child where $\exit x$ follows a right child.
 
-If $x$ exits on the right, then $x$ and $e_x$ are $\preceq$-incomparable and the 
-bit of $x$ after the longest common prefix is a $1$: in this case, $x$ is larger than every leaf
+If $x$ exits on the right, then either $x$ and $e_{\exit x}$ are $\preceq$-incomparable and the 
+bit of $x$ after the longest common prefix is a $1$, or $\exit x$ is a leaf and $e_{\exit x}\prec x$: in both cases, $x$ is larger than every leaf
 under $\exit x$. 
 Again, $x$ is smaller than the following leaves because of the definition of exit node. \qed
 \end{proof}
-\todo[inline]{Check that the statement is correct}
 
 
 
@@ -1279,11 +1372,12 @@ We now proceed to describe how the various types of queries discussed in
 Theorem~\ref{th:bounds} and~\ref{th:boundslong} are handled by the z-fast trie,
 and prove the associated time bounds. In this presentation we shall refer to the
 case of long strings and signature-based tries (the case of short strings is similar, and simpler);
-all time bounds hold only with high probability (whereas the corresponding bounds for short strings are worst-case bounds).
+all time bounds hold only with high probability (whereas the corresponding bounds for short strings are worst-case bounds,
+provided that the dictionary has worst-case lookups).
 All algorithms will need to locate one (or two) exit nodes, and they will do so using Algorithm~\ref{algo:exitorparex}
 followed by a check of correctness (Theorem~\ref{th:errors}): if the correctness check fails (which happens
-with negligible probability), the algorithm resorts to exact search; otherwhise, it will proceed
-locating the exit node through Algorithm~\ref{algo:exit}.  
+with negligible probability), the algorithm resorts to exact search; otherwise, it will proceed
+locating the exit node as in Algorithm~\ref{algo:exit}.  
 
 In all cases, the I/O bounds are easily proved as we scan $x$ (or $y$)
 a fixed number of times to preprocess them so to obtain hashes of prefixes in
@@ -1300,30 +1394,25 @@ right. By moving through jump pointers to the
 leftmost (rightmost, respectively) leaf, we can find the successor (predecessor, resp.) of $x$
 in time $O(\lg\max\{\?|x^-|,|x^+|\?\})$;
 then, possibly after a single access to the doubly linked list of leaves, we can return
-the result, using Lemma~\ref{lemma:descleaves}. For example, if and we want to obtain the
+the result, using Lemma~\ref{lemma:descleaves}. For example, if we want to obtain the
 predecessor $x^-$ of $x$, and $x$ exits on the right, we just return the rightmost leaf under $\exit x$; 
 if $x$ exits on the left, we return the \emph{predecessor} of the leftmost leaf under $\exit x$, instead. 
-The Algorithm is presented in~\ref{algo:predsucc}.
+The algorithm is presented in Algorithm~\ref{algo:predsucc}.
 
 \begin{Algorithm}
 \begin{algorithmic}
 \STATE{\textbf{Function: } Predecessor/Successor}
 \STATE{\textbf{Input:} a string $x$}
 \STATE{\textbf{Output:} $x^-$ and $x^+$, the predecessor and successor of $x$ in $S$} 
-\STATE{$\Sigma\leftarrow\text{LocateExitOrParex}(x)$}
-\IF{$\Sigma=\emptyset$}
-	\STATE{$\eta\leftarrow\text{root}$}
-\ELSE
-	\STATE{$\eta\leftarrow\text{LocateExit}(\text{top}(\Sigma))$}
-\ENDIF
+\STATE{$\eta\leftarrow\text{LocateExit}(x)$}
 \IF{$x$ exits on the left}
-	\STATE{$\lambda\leftarrow\text{prev$(\text{leftmost leaf under $\eta$})$}$}
-	\STATE{$\rho\leftarrow\text{leftmost leaf under $\eta$}$}
+	\STATE{$\mu^-\leftarrow\text{prev$(\text{leftmost leaf under $\eta$})$}$}
+	\STATE{$\mu^+\leftarrow\text{leftmost leaf under $\eta$}$}
 \ELSE
-	\STATE{$\lambda\leftarrow\text{rightmost leaf under $\eta$}$}
-	\STATE{$\rho\leftarrow\text{next$(\text{rightmost leaf under $\eta$})$}$}
+	\STATE{$\mu^-\leftarrow\text{rightmost leaf under $\eta$}$}
+	\STATE{$\mu^+\leftarrow\text{next$(\text{rightmost leaf under $\eta$})$}$}
 \ENDIF
-\STATE{{\bf return } $e_{\lambda}, e_{\rho}$}
+\STATE{{\bf return } $e_{\mu^-}, e_{\mu^+}$}
 \end{algorithmic}
 \caption{\label{algo:predsucc}Predecessor and successor queries.}
 \end{Algorithm}
@@ -1333,8 +1422,9 @@ The Algorithm is presented in~\ref{algo:predsucc}.
 
 In time $O(|x|/w + \lg|x|)$ we recover the
 exit node of $x$ using Algorithm~\ref{algo:exit}. We then check in time
-$O(|x|/w)$ that $x\preceq e_{\exit x}$: if so, we use the left jump pointers to
-reach the leftmost and rightmost leaves under $\exit x$, and then we
+$O(|x|/w)$ that $x\preceq e_{\exit x}$: if so, we use the left and right jump pointers to
+reach the leftmost and rightmost leaves under $\exit x$ (this requires at most $k$ jumps for each leaf, 
+as the subtree under $\exit x$ has $k$ leaves, which are exactly the output), and then we
 enumerate the leaves in the subtree using the pointers of the linked list of leaves, starting from the
 leftmost leaf and stopping at the rightmost one (the enumeration requires
 $O(k)$ time to output $k$ elements). If $x\not\preceq e_{\exit x}$ the output is
@@ -1357,12 +1447,12 @@ a leaf, or $|e_\beta|\geq|x|$. These searches take time $O(\lg\max\{\?|x|,|y|\?\
 We have the following cases:
 \begin{itemize}
   \item if $x$ exits on the left, the answer is ``true'' if and only if $e_\alpha<y$, because all keys
-  greater than or equal $x$ are also necessarily greater than or equal to $e_\alpha$, 
-  and all keys starting with $e_\alpha$ are necessarily smaller than $y$ (because is $\alpha$ is a leaf or $|e_\alpha|\geq |y|$).
+  greater than or equal to $x$ are also necessarily greater than or equal to $e_\alpha$, 
+  and if $e_\alpha<y$ all keys starting with $e_\alpha$ are necessarily smaller than $y$ (because $\alpha$ is a leaf or $|e_\alpha|\geq |y|$).
   \item similarly, if $y$ exits on the right, the answer is ``true'' if and only if $x \leq e_\beta$;
   \item in the remaining case (i.e., if $x$ exits on the right and $y$ exits on the left), the answer is ``true'' if the leaf
   following $x^-$ is not $y^+$, because the leaf following $x^-$ is the first key greater than or equal to $x$, and $y^+$ is the 
-first key greater than or equal o $y$.
+first key greater than or equal to $y$.
 \end{itemize}
 
 We now relieve the third case from its dependence on
@@ -1387,7 +1477,7 @@ The resulting algorithm is presented in Algorithm~\ref{algo:range}.
 \begin{algorithmic}
 \STATE{\textbf{Function: } IsNonempty}
 \STATE{\textbf{Input:} $x$ and $y$, with $x<y$}
-\STATE{\textbf{Output:} whether $S\cap [x\..y)=\emptyset$} 
+\STATE{\textbf{Output:} whether $S\cap [x\..y)\neq\emptyset$} 
 \STATE{$\alpha\leftarrow\text{LocateExit($x$)}$}
 \IF{$x$ exits on the left}
 	\WHILE{$\alpha$ is not a leaf \AND $|e_\alpha|<|y|$}
@@ -1403,7 +1493,7 @@ The resulting algorithm is presented in Algorithm~\ref{algo:range}.
 	\ENDWHILE
 	\STATE{{\bf return} $x \leq e_\beta$}
 \ENDIF
-	\STATE{$\eta\leftarrow\text{LocateExit$(\lcp(x,y))$}$} \COMMENT{Use Algorithm~\ref{algo:exitorparex} followed by Algorithm~\ref{algo:exit}}
+	\STATE{$\eta\leftarrow\text{LocateExit$(\lcp(x,y))$}$}
 	\STATE{$\alpha\leftarrow\text{the left child of $\eta$}$}
 	\WHILE{$\alpha$ is not a leaf \AND $|e_\alpha|<|x|$}
 		\STATE{$\alpha\leftarrow J_\alpha^+$}
@@ -1421,47 +1511,92 @@ The resulting algorithm is presented in Algorithm~\ref{algo:range}.
 \end{Algorithm}
 
 
-\paragraph{Enumerative range queries.} Standard (i.e., enumerative) range queries can be answered easily 
-noting that after the range emptiness check either we know $x^-$ ($y^+$, respectively), or we can recover it
-in time $O(k)$, where $k$ is the size of the output. For example, if $x$
-exits on the left and the output is not empty then the entire subtree under $\exit x$ is part of the output, and thus
-it has size and depth bounded by $k$: we conclude that following left jump pointers
-up to $x^+$ has cost $O(k)$ (recovering $x^-$ is then trivial).
- 
+\paragraph{Enumerative range queries.} Standard (i.e., enumerative) range queries can be answered by
+locating the first leaf of the output and the first leaf following the output, 
+and then scanning the list of leaves between them in time $O(k)$, where $k$ is the size of the output:
+in this way, no string comparison is necessary during the enumeration. Locating the two leaves requires, besides the time 
+necessary for an existential query,
+additional time $O(\lg\max\{\?|x^-|,|y^+|\?\}+k)$.
+
+The first leaf of the output, if any, is the one containing $x^+$. If $x$ exits on the right, 
+we reach $x^-$, which is the rightmost leaf under $\exit x$, in $O(\lg|x^-|)$ jumps, and we move to the following leaf. 
+If $x$ exits on the left, we would like to reach the leftmost leaf under $\exit x$, but $|x^+|$ is not 
+bounded by the quantities at hand; note, however, that when the node $\alpha$ at which the search for the existential
+query stops (see Algorithm~\ref{algo:range}) is such that $e_\alpha<y$, all the leaves under $\alpha$ belong to the output, 
+because their keys are larger than or equal to $x$ and, starting with $e_\alpha$, smaller than $y$.
+Thus, the subtree under $\alpha$ has at most $k$ leaves, and following left jump pointers from $\alpha$ we reach $x^+$
+in at most $k$ jumps. (This is not true of the whole subtree under $\exit x$: 
+if $S=\{\?000, 001, 010, 011\?\}$, $x=0$ and $y=001$, then $\exit x$ is the root, but the output contains
+just $000$.) If instead $e_\alpha\geq y$, the output is empty.
+
+Symmetrically, the last leaf of the output is the one containing $y^-$, and the first leaf following the output 
+is the one containing $y^+$. If $y$ exits on the left, we reach $y^+$,
+which is the leftmost leaf under $\exit y$, in $O(\lg|y^+|)$ jumps. If $y$ exits on the right, 
+we follow right jump pointers from $\exit y$ until we reach a node $\beta$ that is a leaf or such that $|e_\beta|\geq|x|$,
+as in Algorithm~\ref{algo:range}: if $x\leq e_\beta$, all the leaves under $\beta$ belong to the output, so we reach $y^-$ 
+in at most $k$ further jumps, and we move to the following leaf; otherwise, the output is empty.
+
 
 \section{Additional updates}
+\label{sec:addupdates}
 
-In this section we will discuss how to update the additional pointers (jump pointers and list pointers) after the insertion or deletion of a string. 
+In this section we will discuss how to update the additional pointers (jump pointers and list pointers) after the insertion or deletion of a string $x$. 
 
-We remark that to insert a new leaf into the doubly linked list of leaves, if
-$x$ exits on the right (left, respectively) we must insert the new leaf
-immediately before $x^+$ (immediately after $x^-$, respectively):
-section~\ref{sec:predsucc} discussed how to locate predecessors and successors.
+\subsection{Insertions}
 
+Recall that $\exit x$ and $\parex x$ denote the exit and parex node of $x$ \emph{before} the insertion.
+We denote by $\nu$ the new parent node (it is the node called $\beta$ in Figure~\ref{fig:large-example-new})
+and by $\mu$ the new leaf; the left extreme of the skip interval of both $\mu$ and (after the insertion) $\exit x$ 
+is $|n_\mu|=|\lcp(x,e_{\exit x})|+1$.
 
+We remark that to insert the new leaf into the doubly linked list of leaves, if
+$x$ exits on the left (right, respectively) we must insert the new leaf
+immediately before the leftmost leaf (immediately after the rightmost leaf, respectively) under $\exit x$,
+that is, immediately before $x^+$ (immediately after $x^-$, respectively), by Lemma~\ref{lemma:descleaves}:
+such leaves can be reached following the jump pointers of $\exit x$, as discussed in Section~\ref{sec:predsucc}.
 
 \paragraph{Jump pointers of the new node.}
-The new parent node $\beta$ (see Figure~\ref{fig:large-example-new}) will
-need to have its jump pointers set; one of them will simply point to the new leaf, whereas
-to set the other we need to look for the left/right descendant intercepting $|h_\beta|'$.
-Since $|h_\beta|'-|h_\beta|\leq |h_\beta|\leq |x|$, we can start our search from the left/right
-child of $\beta$ and follow at most $\lg |x|$ jump pointers to find the intercepting node.
-The fact that we can simply follow jump pointers can be proven as follows: suppose by contradiction that
-following the jump pointers we reach some node $\eta$ (a left/right descendant of $\beta$) that does not yet intercept
-$|h_\beta|'$ but is such that one of its proper left (right) descendants
-$\gamma$ intercepts $|h_\beta|'$. If $\gamma$ was not a descendant of the left/right jump of $\eta$, then
-\[
-	|h_\eta| < i_\gamma \leq |h_\beta|'\leq j_\gamma  < |h_\eta|',
-\]
-but $|h_\beta|_\prime<|h_\eta|$, so $|h_\beta|_\prime<|h_\eta|<|h_\beta|'$: by the parenthesis property (Lemma~\ref{lemma:paren}),
-we conclude that $|h_\eta|'\leq |h_\beta|'$, a contradiction. 
+The new parent node $\nu$ will
+need to have its jump pointers set. The jump pointer on the side of the new leaf $\mu$ will simply point to $\mu$, as a leaf
+intercepts every number that is not smaller than the left extreme of its skip interval. For the jump pointer on the
+side of $\exit x$ there are two cases:
+\begin{itemize}
+\item if $\exit x$ is internal and $x$ cuts low, $\nu$ inherits the handle of $\exit x$, and thus its jump length $|h_{\exit x}|'$, which
+is larger than $j_{\exit x}$: thus, the jump pointer of $\nu$ is just a copy of the corresponding jump pointer of $\exit x$ (before the insertion);
+\item otherwise, the jump pointer of $\nu$ points to $\exit x$: this is obvious if $\exit x$ is a leaf; if $\exit x$ is internal and $x$ cuts high,
+the handle of $\exit x$ does not change, and $|h_{\exit x}|$ is larger and fatter than $|h_\nu|$, because it is 2-fattest in 
+the skip interval of $\exit x$ before the insertion, which contains $|h_\nu|$; hence $j_\nu<|h_\nu|'\leq|h_{\exit x}|\leq j_{\exit x}$, that is,
+$|h_\nu|'$ belongs to the skip interval of $\exit x$ after the insertion.
+\end{itemize}
 
-\paragraph{Updating jump pointers.}
-Let us now consider how the jump pointers of existing nodes should be updated.
+\paragraph{Jump pointers of the old exit node.}
+If $\exit x$ is internal and $x$ cuts low, the handle of $\exit x$ changes (see Section~\ref{sec:updates}), and thus both
+its jump pointers must be recomputed after the insertion. In general, the left (right) jump pointer of an 
+internal node $\alpha$ can be computed from the jump pointers of its descendants: we start from the left (right)
+child of $\alpha$ and follow left (right) jump pointers until we reach a node intercepting $|h_\alpha|'$.
+
+The fact that we can simply follow jump pointers can be proven as follows (if $|h_\alpha|=0$ there is nothing to prove, as only a leaf 
+intercepts $\infty$): suppose by contradiction that
+following the jump pointers we reach some node $\delta$ (a left/right descendant of $\alpha$) that does not yet intercept
+$|h_\alpha|'$, so that one of its proper left (right) descendants
+$\gamma$ intercepts $|h_\alpha|'$, and that $\gamma$ is a proper ancestor of the left (right) jump of $\delta$; then,
+\[
+	|h_\delta| < i_\gamma \leq |h_\alpha|'\leq j_\gamma  < |h_\delta|',
+\]
+but $|h_\alpha|_\prime<|h_\alpha|<|h_\delta|$, so $|h_\alpha|_\prime<|h_\delta|<|h_\alpha|'$: by the parenthesis property (Lemma~\ref{lemma:paren}),
+we conclude that $|h_\delta|'\leq |h_\alpha|'$, a contradiction. 
+
+Moreover, if $|h_\alpha|>0$ the handles of the nodes $\delta$ we go through have length smaller than $|h_\alpha|'\leq2|h_\alpha|$, and they are fatter and fatter,
+so we follow at most $\lg|h_\alpha|+2$ jump pointers. In the case of $\exit x$, whose new handle is not empty, this means $O(\lg|e_{\exit x}|)$ jumps, and
+$|e_{\exit x}|\leq\max\{\?|x^-|,|x^+|\?\}$, because $e_{\exit x}$ is a prefix of all the keys in the leaves under $\exit x$, 
+which include $x^+$ or $x^-$ by Lemma~\ref{lemma:descleaves}.
+
+\paragraph{Jump pointers of the ancestors.}
+Let us now consider how the jump pointers of the other existing nodes should be updated.
 A node $\alpha$ \emph{crosses} a node
-$\beta$ if $e_\alpha\preceq e_\beta$ (i.e., $\alpha$ is an ancestor of $\beta$) 
+$\beta$ if $\alpha$ is a proper ancestor of $\beta$ 
 and $|h_\alpha|'\geq i_\beta$ (i.e., $\alpha$
-potentially jumps to some left or right descendant of $\beta$). When inserting a
+potentially jumps to $\beta$ or to some left or right descendant of $\beta$). When inserting a
 new string with exit node $\beta$, only nodes crossing $\beta$ might need to change their
 jump pointers. The fundamental combinatorial fact that we will use to update
 quickly the z-fast trie is the following connection between fat binary search
@@ -1474,7 +1609,7 @@ $\gamma$.
 \begin{proof}
 Let $\xi$ be an ancestor of  $\gamma$ that is not a 2-fat ancestor, that is,
 $|h_\gamma|_{(k+1)}<|h_\xi|<|h_\gamma|_{(k)}$ for some $k\geq 0$. Then, by Lemma~\ref{lemma:semipar}
-we have $|h_\xi|'\leq|h_\gamma|_{(k)}\leq |h_\gamma|<i_\beta$.
+we have $|h_\xi|'\leq|h_\gamma|_{(k)}\leq |h_\gamma|<i_\beta$, so $\xi$ does not cross $\beta$.
  \end{proof}
 
 Figure~\ref{fig:jumpline} shows pictorially Theorem~\ref{th:fatanc}. Note that not all the jump pointers of 2-fat ancestors need to be updated: actually, we
@@ -1532,115 +1667,175 @@ The only left jump pointers that need to be updated are those that used to land 
  (c) The trie after the insertion, when $x$ exits on the right. }
 \end{figure}
 
-These considerations are implemented in Algorithm~\ref{algo:jumpupda}, that update the jump pointers after
-the insertion of a string $x$ when the exit node is a left child (a symmetric algorithm will do the adjustment
-when the exit node is a right child).
+These considerations are implemented in Algorithm~\ref{algo:jumpupda}, which updates the jump pointers 
+of the ancestors after
+the insertion of a string $x$ when the exit node was a left child (a symmetric algorithm will do the adjustment
+when the exit node was a right child; if the exit node was the root, there is nothing to do). The algorithm uses the jump pointers of $\exit x$ as they 
+were before the insertion, so it must be run before recomputing them.
 
 \begin{Algorithm}
 \begin{algorithmic}
-\STATE{{\bf Input:} a string $x$ just inserted in the trie, the newly inserted parent is $\eta$, the new leaf is $\lambda$}
-\STATE{{\bf Assumption:} $\exit x$ used to be a left child of its parent}
-\STATE{$\Sigma\leftarrow\text{stack of 2-fat ancestors of $\parex x$}$}
-\WHILE{$\Sigma$ not empty \AND $J^-_{\mathrm{top}(\Sigma)}=\exit x$ \AND $|h_{\mathrm{top}(\Sigma)}|'<n_\lambda$}
+\STATE{{\bf Input:} the stack $\Sigma$ of the 2-fat ancestors of $\parex x$, the node $\exit x$, the new parent node $\nu$, and the new leaf $\mu$}
+\STATE{{\bf Assumption:} $\exit x$ was a left child of its parent}
+\WHILE{$\Sigma$ not empty \AND $J^-_{\mathrm{top}(\Sigma)}=\exit x$ \AND $|h_{\mathrm{top}(\Sigma)}|'<|n_\mu|$}
 	\STATE{pop $\alpha$ from $\Sigma$}
-	\STATE{$J^-_\alpha \leftarrow \eta$}
+	\STATE{$J^-_\alpha \leftarrow \nu$}
 \ENDWHILE
 \IF{$x$ exits on the left}
-	\STATE{$\beta\leftarrow \exit x$}
+	\STATE{$\delta\leftarrow \exit x$}
 	\WHILE{$\Sigma$ not empty}
 		\STATE{pop $\alpha$ from $\Sigma$}
-		\WHILE{$\alpha$ is internal \AND $J^-_\alpha \neq \beta$}
-			\STATE{$\beta\leftarrow J^-_\beta$}
+		\WHILE{$\delta$ is internal \AND $J^-_\alpha \neq \delta$}
+			\STATE{$\delta\leftarrow J^-_\delta$}
 		\ENDWHILE
-		\IF{$J^-_\alpha \neq \beta$}
+		\IF{$J^-_\alpha \neq \delta$}
 			\STATE{\bf return}
 		\ENDIF
-		\STATE{$J^-_\alpha \leftarrow \lambda$}
+		\STATE{$J^-_\alpha \leftarrow \mu$}
 	\ENDWHILE
 \ENDIF
 \end{algorithmic}
-\caption{\label{algo:jumpupda}Algorithm that updates the jump pointers that need to be updated after the insertion
+\caption{\label{algo:jumpupda}Algorithm that updates the jump pointers of the ancestors that need to be updated after the insertion
 of a new element, assuming that the exit node was a left child. A symmetric update algorithm should be 
 used when the exit node was a right child.}
 \end{Algorithm}
 
-\begin{Algorithm}
-\begin{algorithmic}
-\STATE{{\bf Input:} a leaf $\lambda$ just deleted from the trie, its parent $\eta$, and its sibling $\xi$}
-\STATE{{\bf Assumption:} $\lambda$ used to be a left child of its parent}
-\STATE{$\Sigma\leftarrow\text{stack of 2-fat ancestors of the parent of $\eta$}$}
-\WHILE{$\Sigma$ not empty \AND $J^-_{\mathrm{top}(\Sigma)}=\eta$}
-	\STATE{pop $\alpha$ from $\Sigma$}
-	\STATE{$J^-_\alpha \leftarrow \xi$}
-\ENDWHILE
-\IF{$\lambda$ is a right child}
-	\STATE{$\beta\leftarrow \exit x$}
-	\WHILE{$\Sigma$ not empty \AND $J^+_{\mathrm{top}(\Sigma)}=\lambda$}
-		\STATE{pop $\alpha$ from $\Sigma$}
-		\WHILE{$\xi$ does not intercept $|e_\alpha|'$ }
-			\STATE{$\xi\leftarrow J^+_\xi$}
-		\ENDWHILE
-		\STATE{$J^+_\alpha \leftarrow \xi$}
-	\ENDWHILE
-\ENDIF
-\end{algorithmic}
-\caption{\label{algo:jumpupdd}Algorithm that updates the jump pointers that need to be updated after the deletion
-of an element, assuming that the parex node was a left child. A symmetric update algorithm should be 
-used when the parex node was a right child.}
-\end{Algorithm}
-
-
 \begin{theorem}
 \label{th:correctjumpupd}
-Algorithm~\ref{algo:jumpupda} correctly adjusts all the jump pointers that needs to be updated
-in time $O(\lg \max\{\,|x|, |x^+|, |x^-|\,\})$ (w.h.p., in the signature-based case).
+Algorithm~\ref{algo:jumpupda} correctly adjusts all the jump pointers of the ancestors of $\exit x$ that need to be updated;
+together with the operations described above, it updates all the additional pointers after an insertion
+in time $O(\lg \max\{\?|x|, |x^+|, |x^-|\?\})$ (w.h.p., and besides the time required to locate the exit node, in the signature-based case).
 \end{theorem}
 \begin{proof}
-Theorem~\ref{th:fatanc} tells us that the nodes to be updated are a subset of the 2-fat ancestors of $\gamma=\parex x$.
-The first while loop singles out and adjusts the jump pointers that land in the upper part of the exit node
-(i.e., before $|n_\lambda|$). 
-If $x$ exits on the right (Figure~\ref{fig:jumpadjustment} (c)), no other update is necessary.
-Otherwise, we need to take all the jump pointers of the remaining ancestors and make them point to the new leaf, until
-we hit the first right child in the line of ancestors. In order to do this, we pop one ancestor $\alpha$ at a time, and scan the
-left descendants of the exit node to see if we find the node pointed by $J^-_\alpha$. If we reach the leftmost
-leaf and still could not find  $J^-_\alpha$, it means that $\alpha$ is the first 2-fat ancestor after
-the left turn, and we stop.
+Theorem~\ref{th:fatanc} tells us that the nodes to be updated are a subset of the 2-fat ancestors of $\gamma=\parex x$,
+which we pop from the stack in order of decreasing handle length. We will use three simple facts. 
+First, by Lemma~\ref{lemma:updown} the jump lengths of the nodes we pop are nondecreasing. 
+Second, since $|h_\gamma|'>j_\gamma=i_{\exit x}-1$, all such jump lengths are at least $i_{\exit x}$. Third,
+if $\exit x$ is not a left descendant of a node of the stack, it is not a left descendant of the nodes below it in the stack, 
+either, and the left jump pointers of all such nodes need no update, as the set of their left descendants does not change. 
 
-We are left to explain why, in the inner loop, if $J^-_\alpha\neq \beta$ we can go down to $J^-_\beta$.
-This is a consequence of the parenthesis property, and follows from the same kind of reasoning as
-applied above when setting the jump pointers for the new node.
-% Suppose, by contradiction, that $J^-_\alpha$ is a node, say $\gamma$, that is a proper descendant of $\beta$ but a proper ancestor of
-% $J^-_\beta$. This would mean that:
-% \[
-% 	|h_\beta| < i_\gamma \leq |h_\alpha|'\leq j_\gamma  < |h_\beta|'.
-% \]
-% But $|h_\alpha|_\prime<|h_\beta|$, so
-% \[
-% 	|h_\alpha|_\prime < |h_\beta| < |h_\alpha|'
-% \]
-% hence, by the parenthesis property (Lemma~\ref{lemma:paren}), we conclude that $|h_\beta|'\leq |h_\alpha|'$, 
-% contradicting $|h_\alpha|'<|h_\beta|'$.
+Let now $\alpha$ be a node of the stack such that $\exit x$ is one of its left descendants: 
+before the insertion, $J^-_\alpha$ is either $\exit x$ or one of its left descendants. If $|h_\alpha|'<|n_\mu|$ then $J^-_\alpha=\exit x$, and 
+$|h_\alpha|'$ belongs to the skip interval of $\nu$, so $J^-_\alpha$ must be set to $\nu$. By the first and third facts, 
+the nodes of this kind are at the top of the stack, and the first while loop singles out and adjusts exactly their left jump pointers.
 
-As for the time bound, looking for the exit node requires time $O(\lg |x|)$;
-apart for that, the most time-consuming part is the inner loop (in the case $x$ exits on the left). The
-length of the leftmost path under the exit node is limited by $|x^-|$, and we traverse it in logarithmic
-time (i.e., $O(\lg |x^-|)$), hence the bound.
+If $|h_\alpha|'\geq|n_\mu|$ and $x$ exits on the right (Figure~\ref{fig:jumpadjustment} (c)), the left descendants of $\alpha$ 
+below $\nu$ are $\exit x$ and its left descendants, as before; their skip intervals are the same, except for the skip interval of $\exit x$, 
+which is now $[|n_\mu|\..j_{\exit x}]$: thus, no other update is necessary.
+If instead $x$ exits on the left, the only left descendant of $\alpha$ below $\nu$ is $\mu$, so we 
+need to take the left jump pointers of all the remaining nodes of the stack having $\exit x$ as left descendant---by the third fact, they are again
+at the top of the stack---and make them point to the new leaf. 
+In order to do this, we pop one ancestor $\alpha$ at a time, and scan the sequence of nodes obtained starting from $\exit x$
+and following left jump pointers to see if we find the node pointed by $J^-_\alpha$. If we reach the leftmost
+leaf under $\exit x$ and still could not find  $J^-_\alpha$, it means that $\exit x$ is not a left descendant of $\alpha$
+(i.e., $\alpha$ is the first 2-fat ancestor after
+the left turn), and we stop. Since by the first fact the nodes pointed by the successive $J^-_\alpha$ are farther and farther from $\exit x$, 
+a single scan is sufficient.
+
+We are left to explain why, in the inner loop, if $J^-_\alpha\neq \delta$ we can go down to $J^-_\delta$.
+This is a consequence of the parenthesis property, and follows from the same kind of reasoning we
+applied above when computing the jump pointers of a node.
+Suppose, by contradiction, that $J^-_\alpha$ is a node, say $\zeta$, that is a proper left descendant of $\delta$ but a proper ancestor of
+$J^-_\delta$ (in particular, $\zeta$ is internal, so $|h_\alpha|>0$). This would mean that
+\[
+	|h_\delta| < i_\zeta \leq |h_\alpha|'\leq j_\zeta  < |h_\delta|'.
+\]
+But $|h_\alpha|_\prime<|h_\alpha|<|h_\delta|$, so
+\[
+	|h_\alpha|_\prime < |h_\delta| < |h_\alpha|';
+\]
+hence, by the parenthesis property (Lemma~\ref{lemma:paren}), we conclude that $|h_\delta|'\leq |h_\alpha|'$, 
+contradicting $|h_\alpha|'<|h_\delta|'$.
+
+As for the time bound, looking for the exit node requires time $O(\lg |x|)$, and the stack contains $O(\lg|x|)$ nodes;
+setting the jump pointers of the new node requires constant time, and we have already shown that recomputing 
+those of the old exit node requires time $O(\lg\max\{\?|x^-|,|x^+|\?\})$.
+Apart from that, the most time-consuming part is the inner loop (in the case $x$ exits on the left). The
+leaf at the end of the leftmost path under the exit node is $x^+$, and we traverse the path following jump pointers, that is, in logarithmic
+time (i.e., $O(\lg |x^+|)$; in the symmetric case, $O(\lg|x^-|)$), hence the bound.
 \qed
 \end{proof}
-\todo[inline]{Double-check this proof}
-
-
 
 
 \subsection{Deletions} 
 
-Besides the operations described in Section~??\todo{Sezione update},removal from the doubly-linked list
-of leaves is trivial, and we have to set the jump pointers of the sibling of the exit node
-only if is internal and $|x|$ cuts low; otherwise, the jump pointers of the sibling do not need updating. 
+Let $\mu$ be the leaf containing $x$, $\pi=\parex x$ its parent, which is deleted, too, and $\xi$ the sibling of $\mu$,
+which takes the place of $\pi$: after the deletion, the skip interval of $\xi$ is $[i_\pi\..j_\xi]$. 
+In this section, $x^-$ and $x^+$ denote the predecessor and the successor of $x$ in $S\setminus\{\?x\?\}$.
+Besides the operations described in Section~\ref{sec:updates}, removal from the doubly linked list
+of leaves is trivial.
 
+\paragraph{Jump pointers of the sibling.} 
+We have to set the jump pointers of $\xi$
+only if it is internal and it takes over the handle of $\pi$ (see Section~\ref{sec:updates}); otherwise, the handle of $\xi$ does not change, and
+its jump pointers do not need updating. 
+If $\xi$ takes over the handle of $\pi$, its jump length becomes $|h_\pi|'$, which is larger than $j_\xi$, because $|h_\pi|$ is the 2-fattest 
+number in the new skip interval $[i_\pi\..j_\xi]$ of $\xi$. Thus, on the side opposite to $\mu$ the jump pointer of $\xi$ 
+is just a copy of the corresponding jump pointer of $\pi$, which pointed to a proper descendant of $\xi$. 
+On the side of $\mu$, instead, the jump pointer of $\pi$ pointed to $\mu$, and the jump pointer of $\xi$ must be 
+computed by starting from the child of $\xi$ on that side and following jump pointers, as we discussed in the case of insertions. 
+The leaf at the end of the path we follow is $x^+$ if $\mu$ was a left child, $x^-$ otherwise, so this operation
+requires time $O(\lg\max\{\?|x^-|,|x^+|\?\})$. Note that copying one of the two pointers is essential to obtain this bound, 
+as the length of the leaf at the end of the path on the side opposite to $\mu$ is unrelated to $|x^-|$ and $|x^+|$
+(in particular, when $\pi$ is the root, as in this case $|h_\pi|'=\infty$). 
+
+\paragraph{Jump pointers of the ancestors.} 
 There is just one important observation to be made: to fix the jump pointers of the remaining nodes, we
-need to know the 2-fat ancestors of the parent of $\parex x$, not of $\parex x$. Algorithm~\ref{algo:jumpupdd}
-shows how to perform the updates: its correctness proof is similar to that of Theorem~\ref{th:correctjumpupd}.
+need to know the 2-fat ancestors of the parent of $\pi=\parex x$, not of $\parex x$ (see Section~\ref{sec:reusing}). 
+Algorithm~\ref{algo:jumpupdd}
+shows how to perform the updates when $\pi$ was a left child (if $\pi$ was the root, there is nothing to do). 
+The algorithm must be run after the skip interval and the jump pointers of $\xi$ have been updated.
+
+\begin{Algorithm}
+\begin{algorithmic}
+\STATE{{\bf Input:} the stack $\Sigma$ of the 2-fat ancestors of the parent of the deleted internal node $\pi$, the deleted leaf $\mu$, and its sibling $\xi$}
+\STATE{{\bf Assumption:} $\pi$ was a left child of its parent}
+\WHILE{$\Sigma$ not empty \AND $J^-_{\mathrm{top}(\Sigma)}=\pi$}
+	\STATE{pop $\alpha$ from $\Sigma$}
+	\STATE{$J^-_\alpha \leftarrow \xi$}
+\ENDWHILE
+\IF{$\mu$ was the left child of $\pi$}
+	\STATE{$\delta\leftarrow \xi$}
+	\WHILE{$\Sigma$ not empty \AND $J^-_{\mathrm{top}(\Sigma)}=\mu$}
+		\STATE{pop $\alpha$ from $\Sigma$}
+		\WHILE{$\delta$ does not intercept $|h_\alpha|'$ }
+			\STATE{$\delta\leftarrow J^-_\delta$}
+		\ENDWHILE
+		\STATE{$J^-_\alpha \leftarrow \delta$}
+	\ENDWHILE
+\ENDIF
+\end{algorithmic}
+\caption{\label{algo:jumpupdd}Algorithm that updates the jump pointers of the ancestors that need to be updated after the deletion
+of an element, assuming that the parex node $\pi$ was a left child. A symmetric update algorithm should be 
+used when the parex node was a right child.}
+\end{Algorithm}
+
+\begin{theorem}
+\label{th:correctjumpupdd}
+Algorithm~\ref{algo:jumpupdd} correctly adjusts all the jump pointers of the ancestors of $\pi$ that need to be updated;
+together with the operations described above, it updates all the additional pointers after a deletion
+in time $O(\lg \max\{\?|x|, |x^+|, |x^-|\?\})$ (w.h.p., and besides the time required to locate the exit node, in the signature-based case).
+\end{theorem}
+\begin{proof}
+The proof is similar to that of Theorem~\ref{th:correctjumpupd}. The nodes to be updated cross $\pi$, 
+so by Theorem~\ref{th:fatanc} they are 2-fat ancestors of the parent of $\pi$; we pop them from the stack in order of
+nondecreasing jump length, all jump lengths are at least $i_\pi$, and the nodes having $\pi$ as a left descendant, which are the only ones whose
+left jump pointer might need an update, are at the top of the stack.
+
+Let $\alpha$ be such a node. If $|h_\alpha|'\leq j_\pi$, then $J^-_\alpha=\pi$, and $J^-_\alpha$ must be set to $\xi$, 
+whose skip interval now contains that of $\pi$: this is what the first loop does. Otherwise, if $\mu$ was the right child of $\pi$ then $J^-_\alpha$
+is either $\xi$ or one of its left descendants; since the skip intervals of such nodes have not changed, except for the skip interval of $\xi$, 
+which is now larger, no update is necessary. If instead $\mu$ was the left child of $\pi$, then $J^-_\alpha=\mu$, because $\mu$ was the only left descendant
+of $\pi$, and $J^-_\alpha$ must be set to the node intercepting $|h_\alpha|'$ among $\xi$ and its left descendants. The second loop 
+looks for such a node following left jump pointers from $\xi$: as in the case of insertions, 
+the parenthesis property guarantees that in this way we cannot miss the node we are looking for, and since jump lengths are nondecreasing
+a single scan is sufficient. The loop stops at the first node whose left jump pointer is not $\mu$, 
+which is the first node of the stack not having $\pi$ as a left descendant.
+
+As for the time bound, completing the stack requires time $O(\lg|x|)$ (Section~\ref{sec:reusing}), and
+the scan follows left jump pointers along the leftmost path under $\xi$, which 
+ends at $x^+$, so it requires time $O(\lg |x^+|)$ (in the symmetric case, $O(\lg|x^-|)$). \qed
+\end{proof}
 
 
 \section{Improvements}
@@ -1648,19 +1843,19 @@ shows how to perform the updates: its correctness proof is similar to that of Th
 
 \subsection{Avoiding the computation of the 2-fattest number}
 
-Algorithm~\ref{algo:parex} requires the computation of a 2-fattest number, and thus of $\lambda$ (the index of the highest bit set)\todo{$\lambda$ is sometimes used as name of a variable in algorithms; is that ok?}, at each
-iteration. However, unless multiplication is allowed in the model, the cost of computing $\lambda$ is $\lg \lg w$.
-In this section we show how to compute that 2-fattest numbers required by Algorithm~\ref{algo:parex} using
+Algorithm~\ref{algo:parex} requires the computation of a 2-fattest number, and thus of $\lambda$ (the index of the highest bit set), at each
+iteration. However, unless multiplication is allowed in the model, the cost of computing $\lambda$ is $\lg \lg w$\todo{Citation needed for the $\lg\lg w$ bound.}.
+In this section we show how to compute the 2-fattest numbers required by Algorithm~\ref{algo:parex} using
 a single computation of $\lambda$ at the start of the algorithm. 
 
 Suppose that $i$ is initialized
-so that $i-1$ is the length of $\bar a$ (and $\bar b$), or longer\footnote{One way to initialize
+so that $i+1$ is the length of $\bar a$ (and $\bar b$), or larger.\footnote{One way to initialize
 correctly $i$ is $\lambda((a-1)\oplus b)$. 
 To include the case $a=0$, note that initializing $i$ as $\lambda(b)+1$ leads
-to a correct execution. }
+to a correct execution. } If
 \begin{equation}
 \label{cond:twofattest}
-	(-1\ll i)\mathbin\&(a-1) \neq (-1\ll i)\mathbin\& b.
+	(-1\ll i)\mathbin\&(a-1) \neq (-1\ll i)\mathbin\& b
 \end{equation}
 we have in fact found the first index where $a-1$ and $b$ differ, and $(-1\ll i)\mathbin\& b$
 is the 2-fattest number we were looking for.
@@ -1685,9 +1880,9 @@ The advantage of this approach with respect
 to the first one is the following: suppose that after computing the 2-fattest number $f$, you update the
 search interval to either $[\tilde a\..\tilde b]=[a\..f-1]$ or to $[\tilde a\..\tilde b]=[g+1\..b]$ for some $g\geq f$, and iterate the task of computing the 2-fattest
 number in the new interval (this is what we will do, for instance, in Algorithm~\ref{algo:parex} or Algorithm~\ref{algo:exitorparex}).
-In both cases, $\lambda{(\tilde a-1)\oplus \tilde b}$ is strictly smaller than that of $\lambda{(a-1)\oplus b}$, so to start
-finding the new 2-fattest number we can just increment $i$ (or, equivalently, shift the mask $-1\ll i$) of
-one position to the right (see Table~\ref{tab:compalgos}).
+In both cases, $\lambda((\tilde a-1)\oplus \tilde b)$ is strictly smaller than $\lambda((a-1)\oplus b)$, so to start
+finding the new 2-fattest number we can just decrement $i$ (or, equivalently, shift the mask $-1\ll i$ by
+one position to the right, using an arithmetic shift, that is, a shift that replicates the sign bit; see Table~\ref{tab:compalgos}).
 
 
 \begin{table}
@@ -1739,57 +1934,76 @@ one position to the right (see Table~\ref{tab:compalgos}).
 \hline
 \end{tabular}
 \smallskip
-\caption{\label{tab:compalgos}These two algorithms are equivalent (here, we are assuming $0 \leq a\leq b$ at the beginning).}
+\caption{\label{tab:compalgos}These two algorithms are equivalent (here, we are assuming $0 \leq a\leq b$ at the beginning, 
+and that $\gg$ is an arithmetic shift).}
 \end{table}
 
 \subsection{Reusing a stack of $2$-fat ancestors}
 \label{sec:reusing}
 
 Sometimes, both in the case of Algorithm~\ref{algo:parex} and of Algorithm~\ref{algo:exitorparex},
-on input $x$ we obtain a certain node $\sigma$ and its stack $2$-fat ancestors, but we actually need the same data for
+on input $x$ we obtain a certain node $\sigma$ and the stack of its $2$-fat ancestors, but we actually need the same data for
 the parent of $\sigma$ (or some ancestor of $\sigma$, as it happens for existential range queries). Asymptotically speaking, this is not a problem, as we just need to 
 rerun either algorithm using the name of $\sigma$ as input, in the first case, or the name of $\sigma$
 without the last digit as input, in the second case.
 
-However, in practice we can avoid to rerun part of the algorithm thanks to the following result:
+However, in practice we can avoid rerunning part of the algorithm thanks to the following result:
 \begin{theorem}
 \label{th:parent}
 Let $\alpha_0$,~$\alpha_1$, $\dots\,$,~${\alpha}_{t}=\sigma$
-be the sequence of 2-fat ancestors of $\sigma$. Then, setting
-$\Sigma=\alpha_0$,~$\alpha_1$, $\dots\,$,~${\alpha}_{t-1}$, $a = |e_{{\alpha}_{t-1}}|+1$, and $b=|e_\sigma|-1$
+be the sequence of 2-fat ancestors of a node $\sigma$ different from the root, and let $\tau$ be the parent of $\sigma$. Then, 
+$\alpha_0$,~$\alpha_1$, $\dots\,$,~${\alpha}_{t-1}$ are exactly the 2-fat ancestors of $\tau$ 
+whose handle is not longer than $h_{\alpha_{t-1}}$. Thus, setting
+$\Sigma=\alpha_0$,~$\alpha_1$, $\dots\,$,~${\alpha}_{t-1}$, $a = |e_{{\alpha}_{t-1}}|+1$, and $b=|n_\sigma|-1=|e_\tau|$
 gives a state of Algorithm~\ref{algo:exitorparex} satisfying the invariant of Theorem~\ref{th:exitorparex}
-for the input string $e_\sigma[0\..|e_\sigma|-1)$, so completing the algorithm leaves on the
-stack the sequence of 2-fat ancestors of the parent of $\sigma$.
+for the input string $e_\sigma[0\..|n_\sigma|-1)=e_\tau$, so completing the algorithm leaves on the
+stack the sequence of 2-fat ancestors of $\tau$.
 \end{theorem}
 \begin{proof}
-There cannot be handles lexicographically between the handle
-of the parent $\tau$ of $\sigma$ and the handle of $\sigma$. So $h_{{\alpha}_{t-1}}$ is a prefix of $h_\tau$
-of length $-1 \mathbin\ll \lambda(|h_\sigma|\oplus|h_\tau|) \mathbin\& |h_\tau|= |h_\tau|_{(k)}$ for some $k$. 
+Let $r=|h_\sigma|$, $q=|h_\tau|$ and $m=|h_{\alpha_{t-1}}|$. Since $\alpha_{t-1}$ is a proper ancestor of $\sigma$, that is,
+$\tau$ or one of its ancestors, we have $m\leq q<r$. By the remark after Lemma~\ref{lemma:twofateq}, $m$ is the 
+2-fattest number in $[m\..r]$, and thus in $[m\..q]$, so $m$ is a backjump of $q$ and $\alpha_{t-1}$ is a 2-fat ancestor of $\tau$.
+Moreover, the backjumps of $q$ that are not larger than $m$ are exactly the backjumps of $m$, which in turn 
+are exactly the backjumps of $r$ that are not larger than $m$: thus, the 2-fat ancestors of $\tau$ whose handle is not longer 
+than $h_{\alpha_{t-1}}$ are exactly \lst\alpha{t-1}. 
+
+Finally, the exit node of $e_\tau$ is $\tau$, which is internal, and $e_\tau$ cuts low, so on input $e_\tau$ the node $\sigma$ of 
+Theorem~\ref{th:exitorparex} is $\tau$; the invariant is satisfied because $\alpha_{t-1}$ is one of the 2-fat ancestors of $\tau$,
+the stack contains $\alpha_{t-1}$ and the 2-fat ancestors preceding it, and $|h_\tau|\leq|e_\tau|=b$. \qed
 \end{proof}
 
-Note that by definition in the completion of Algorithm~\ref{algo:exitorparex} using the setup of Theorem~\ref{th:parent} 
-the z-map never returns $\bot$. Thus, we can simplify the application of Theorem~\ref{th:parent} to Algorithm~\ref{algo:parent}. 
+Note that in the completion of Algorithm~\ref{algo:exitorparex} using the setup of Theorem~\ref{th:parent} 
+the z-map never returns $\bot$: indeed, if the loop is executed at all then $\alpha_{t-1}\neq\tau$, so $a\leq|h_\tau|$; a 2-fattest number 
+$f$ in $[a\..b]$ larger than $|h_\tau|$ would be a number in the skip interval of $\tau$ fatter than $|h_\tau|$, which is impossible. 
+Thus, we always have $f\leq|h_\tau|$, 
+which is the first case of the proof of Theorem~\ref{th:exitorparex}. For the same reason, all the strings used to query the z-map are 
+handles, so in the signature-based case no false positive can occur. 
+We can thus simplify the application of Theorem~\ref{th:parent} to Algorithm~\ref{algo:parent}. 
 
 \begin{Algorithm}
 \begin{algorithmic}
 \STATE{\textbf{Function: } ParentStack}
 \STATE{\textbf{Input:} a stack $\Sigma$ of 2-fat ancestors of a node $\sigma$}
-\STATE{\textbf{Output:} a stack $\Sigma$ of 2-fat ancestors of the parent of $\sigma$} 
-\STATE{$\sigma = \operatorname{pop}(\Sigma)$}
-\STATE $a, b\leftarrow |e_{\operatorname{top}(\Sigma)}|+1,|e_\sigma|-1$
+\STATE{\textbf{Output:} a stack $\Sigma$ of 2-fat ancestors of the parent of $\sigma$ (the empty stack if $\sigma$ is the root)} 
+\STATE{$\sigma \leftarrow \operatorname{pop}(\Sigma)$}
+\IF{$\Sigma$ is empty}
+	\STATE{{\bf return} $\Sigma$} \COMMENT{$\sigma$ is the root}
+\ENDIF
+\STATE $a, b\leftarrow |e_{\operatorname{top}(\Sigma)}|+1,|n_\sigma|-1$
 \WHILE{$a \leq b$}
         \STATE{$f\leftarrow $ the 2-fattest number in $[a\..b]$}
-        \STATE{$\beta\leftarrow Z(x[0\..f))$}
+        \STATE{$\beta\leftarrow Z(e_\sigma[0\..f))$}
         \STATE push $\beta$ on $\Sigma$
         \STATE $a\leftarrow |e_\beta| + 1$ 
 \ENDWHILE
 \STATE{{\bf return} $\Sigma$}
 \end{algorithmic}
 \caption{\label{algo:parent}At the end of the
-execution, on the stack you will find the 2-fat ancestors of the parent of $\operatorname{top}(\Sigma)$.}
+execution, on the stack you will find the 2-fat ancestors of the parent of the node that was on the top of the stack.}
 \end{Algorithm}
 
 \subsection{Reusing preprocessed state for hashing}
+\label{sec:reusinghash}
 
 In many situations during updates we need to compute hashes of binary strings that share a significant
 prefix with a binary string we have already preprocessed. For example, when
@@ -1798,25 +2012,45 @@ the signature of the handle of the exit node, as the length of its name has chan
 handle shares a significant prefix with $x$: by providing a specialized version of the hash function
 that utilizes only partially some preprocessed state, the computation of the hash can be sped up.  
 
+Note that the new handle of the exit node is not a prefix of $x$, so we have to argue that its signature
+can be computed within the bounds of Theorem~\ref{th:boundslong}. Let $h>0$ be the length of the handle of the exit node before the insertion,
+and assume that the exit node is not the root. Since $x$ cuts low, $h\leq|x|$. The length $g$ of the new handle belongs to
+the skip interval of the exit node, in which $h$ is 2-fattest, so $g<h'\leq2h\leq 2|x|$,
+and the signature can be computed in time $O(|x|/w)$. The same argument applies to deletions, when the sibling of the deleted leaf takes over 
+the handle of a parex node that is not the root, and the old handle of the sibling must be removed from the z-map.
+\todo[inline]{If the exit node (for insertions) or the parex node (for deletions) is the root, the argument above fails, 
+as $h=0$: the handle whose signature has to be computed can be as long as the extent of the root (before the insertion, or after the deletion), 
+which is not bounded by a function of $|x|$. Options: add to the update bounds of Theorem~\ref{th:boundslong} 
+a term $O(|e_{\mathrm{root}}|/w)$ for the updates that split or remove the root (note that $|e_{\mathrm{root}}|\leq\min\{\?|x^-|,|x^+|\?\}$);
+or find a way to keep enough preprocessed hash state for the extent of the root.}
+
 \section{Space usage}
+\label{sec:spaceusage}
 
 We now provide a precise evaluation of the space used by the z-fast trie. Let $w$ be the size of an integer,
-and $p$ the size of a pointer. If keys have (at most) size $kw$ bits and we store extents explicitly,  
+and $p$ the size of a pointer. Since a trie with $n$ leaves has $n-1$ internal nodes, we attribute to each key 
+the space used by one leaf and (at most) one internal node. If keys have (at most) size $kw$ bits and we store extents explicitly,  
 each internal node 
 contains the extent ($kw$ bits), the left extreme of the skip interval ($w$ bits), and four pointers (children and jump pointers, $4p$ bits); each
 leaf contains the associated key ($kw$ bits), the left extreme of the skip interval ($w$ bits), and two pointers (previous and next leaf, $2p$ bits).
 The dictionary slots contain just a pointer to the associated internal node: assuming a standard open-addressing
-implementation with a load factor of $2/3$ and backing array sized as a power of $2$, we have
-$kw + w + 4p + kw + w + 2p + 3p = (2k + 2)w +9p$ bits of space per key.
-That is, the space occupied is twice the size of the key set, plus nine pointers per key.
+implementation with a load factor of at most $2/3$ and backing array sized as a power of $2$, there are at most three slots per key, and we have
+at most $kw + w + 4p + kw + w + 2p + 3p = (2k + 2)w +9p$ bits of space per key.
+That is, the space occupied is twice the size of the key set, plus two integers and nine pointers per key.
 
-If we opt for not storing the extents, at the price of an additional pointer per node, the space usage is $(k + 2)w +11p$. Whether this
+If we opt for not storing the extents, at the price of an additional pointer per node (the reference leaf, in internal nodes, and the 
+backward reference, in leaves; see Section~\ref{sec:space}), the space usage is $(k + 2)w +11p$, that is, the size of the key set plus
+two integers and eleven pointers per key. Whether this
 approach is advantageous in terms of space depends on the relation between $p$ and $w$, but assuming $p=w$ the previous approach is
-preferrable for $k\leq 2$.  
+preferable for $k\leq 2$.  
 
-Finally, in the case of the signed z-fast trie we need to store a signature of $cw + \lg w$ bits in each slot of the hash table, and
-a pointer in each leaf to the associated key,
-yielding $(3c + 2)w + 3\lg w +12p$ bits per key, plus the space necessary to store the keys themselves.
+If, moreover, the keys are not stored in the leaves (as it necessarily happens for variable-length strings), each leaf needs 
+an additional pointer to its key: the resulting nodes are shown in Figure~\ref{fig:nodesbis}, and the space usage, 
+besides that necessary to store the keys themselves, is $2w+12p$ bits per key, that is, two integers and twelve pointers per key,
+as stated in Theorem~\ref{th:bounds}.
+
+Finally, in the case of the signed z-fast trie we need to store a signature of $cw + \lg w$ bits in each slot of the hash table, 
+yielding $(3c + 2)w + 3\lg w +12p$ bits per key, plus the space necessary to store the keys themselves, as stated in Theorem~\ref{th:boundslong}.
 
 % \subsection{Final representation and space usage evaluation}
 % \label{sec:space}
@@ -1856,12 +2090,11 @@ yielding $(3c + 2)w + 3\lg w +12p$ bits per key, plus the space necessary to sto
 
  \begin{figure}[h!]
  \centering
- \label{fig:nodesbis}
  \includegraphics[scale=.6]{fig/trienodes-3.pdf}
   $\quad$
   \includegraphics[scale=.6]{fig/trienodes-4.pdf}
  \caption{\label{fig:nodesbis}The content of the trie internal nodes (left) and leaves
-  (right), avoiding to store additional strings in the internal nodes.}
+  (right), when no additional string is stored in the internal nodes and the keys are stored outside of the leaves.}
  \end{figure}
  
  
@@ -1883,56 +2116,79 @@ yielding $(3c + 2)w + 3\lg w +12p$ bits per key, plus the space necessary to sto
 % This gives an overall total of $12p+2w$ bits/key in the exact case, $12p+(2+c)w+\lg w$ bits/key
 % in the signature-based case. 
  
-% Leaf: pointer to key, pointer to node holding the key, left/right pointers
-% Internal: left/right pointers, left/right jump pointers, pointer to node
-% holding the key, skip interval
-% Dictionary: 2 signatures, 2 pointers.
 
 
 \section{Experiments}
 
-In this section we show that on large collections of integers, the z-fast trie
-can beat red-black binary trees, and that on large collection of long strings it
-can beat even B-trees, the golden standard of comparison-based data structures
+In this section we show that on large collections of integers the z-fast trie
+can beat red-black binary trees, and that on large collections of long strings it
+can beat even B-trees, the gold standard of comparison-based data structures
 (but remember that the space occupied by the z-fast trie is presently much
 larger).
 
-Our reference implementation uses a standard linear-probe hash map. In the signed case,
+The experiments use a C implementation derived from our reference Java implementation. 
+It uses a standard linear-probing hash map. In the signed case,
 signatures are $63$ bits wide, with the upper bit reserved to mark duplicates. We use a
-hash function derived from Austin Appleby's MurmurHash2, which, while being not state of the art,
-it is better suited to our needs because its internal state is given by $64$ bits. Thus,
+hash function derived from Austin Appleby's MurmurHash2, which, while not being state of the art,
+is better suited to our needs because its internal state is given by $64$ bits. Thus,
 precomputing and storing the state every $64$ bits is not expensive, and in particular
 the completion of a hash computation (i.e., the hashing of the last bits not covered by preprocessing, which are at most $63$)
 is very fast. Faster, more recent hash functions improve
 speed by consuming larger blocks of data at a time, thus exploiting the internal parallelism
 of the processor, but the larger blocks make the completion phase more onerous. The two modifications
 we made to MurmurHash2 are support for bit lengths, and support for preprocessed state, which
-required to move the mixing of the prefix length at the end of the hash computation, rather
+required moving the mixing of the prefix length to the end of the hash computation, rather
 than at the start. 
 
-For the standard (or ''short'') case, we consider a few sets of random integers  of increasing
-size. All implementations have been forced to perform a single-shot allocation of all necessary
-memory, and do not perform any \texttt{free} operation, thus highlighting the algorithmic differences. 
-Realistic implementations can used pooled allocators to obtain similar results. Our
+For the standard (or ``short'') case, we consider a few sets of random $64$-bit integers of increasing
+size. In all implementations the nodes are taken from a pool obtained with a single allocation, 
+and they are never returned to the system, thus highlighting the algorithmic differences; 
+realistic implementations can use pooled allocators to obtain similar results. 
+The hash table of the z-fast trie, however, is reallocated each time it doubles, and the string 
+version of the z-fast trie allocates and frees the preprocessed state of the hash function at each operation.
+Our
 implementation is public and can be obtained at\todo{LINK}. We used Ben Pfaff's implementation
-of red-black trees contained in the GNU LibAVL library, and Google's public available implementation
+of red-black trees contained in the GNU LibAVL library, and Google's publicly available implementation
 of B-trees, both of which are considered of very high quality\todo{LINK}.
 
-Tables~\ref{tab:intm} and~\ref{tab:intb} shows clearly that for a million integers the z-fast trie
-is the slowest data structure, but already at $8$ billion integers it is two times faster than
-a red-black tree. It remains still two times slower than a B-tree as comparisons between integers
+All timings are averages obtained from the user CPU time of a single run. In each run, we first add all keys (``Add''); 
+then we perform membership queries for keys in the set (``Contains$^+$'') and not in the set (``Contains$^-$''), 
+and predecessor queries (``Predecessor''); finally, we delete all keys in insertion order (``Delete'').
+In the case of the B-tree, the timings reported for predecessor queries are actually timings for successor queries 
+(the \texttt{lower\_bound} method).
+\todo[inline]{The experiments should be rerun before publication: the description of the hardware, compiler and options is missing
+(and Tables~\ref{tab:intb} and~\ref{tab:intbb} were obtained on different hardware and with different page sizes); 
+the space used by each structure was not measured; timings come from a single run and measure user CPU time only; and the 
+function used to permute the integer keys does not generate uniform permutations 
+(it swaps position $i$ with a random position in $[0\..n-i)$ instead of $[i\..n)$).}
+
+Tables~\ref{tab:intm} and~\ref{tab:intb} show clearly that for a million integers the z-fast trie
+is the slowest data structure, but at $8$ billion integers it is from $1.6$ to $2.05$ times faster than
+a red-black tree, depending on the operation. It remains still about two times slower than a B-tree
+(from $1.9$ to $2.6$ times), as comparisons between integers
 take constant time (and we will see, indeed, that once we consider strings the situation will be very different).
 
 Table~\ref{tab:intbb} shows the results of running the same experiments on $32$ billion integers, which required
-hardware with 4\,TiB of RAM; the experiment also used large memory pages. As it is evident, with very large
-data sets the timings of the z-fast are now within $10\%$ of those of a B-tree.
+hardware with 4\,TiB of RAM; the experiment also used large memory pages. With such a large
+data set the z-fast trie is still slower than a B-tree, but the gap is much smaller: queries take $8$\% to $17$\% more time, 
+insertions $24$\% more, and deletions $59$\% more.
 
-Tables~\ref{tab:urlsm} and~\ref{tab:urlsb} contains instead results for the ``long strings'' case, where
+Tables~\ref{tab:urlsm} and~\ref{tab:urlsb} contain instead results for the ``long strings'' case, where
 we use real-world lists of URLs (their order has been randomized, though) from the \texttt{eu-2015}
-crawl distributed by the Laboratory for Web Algorithmics.\footnote{\url{http://law.di.unini.it/datasets.php}} In this setting,
-signed z-fast tries can beat even B-trees already when considering sets of a few million strings, and
-when considering sets with a billion elements is more than twice faster. In this case, comparisons
-are costly 
+crawl distributed by the Laboratory for Web Algorithmics.\footnote{\url{http://law.di.unimi.it/datasets.php}} 
+The strings are NUL-terminated, and the terminator is part of the key, which makes the set prefix-free; 
+the keys not in the set used for the ``Contains$^-$'' test are obtained by replacing with \texttt{0xFF} the byte in the middle of a key.
+In this setting, on a million strings
+the signed z-fast trie is already faster than a B-tree on queries (the B-tree takes $6$\% to $17$\% more time), but it is slower on insertions ($1.35$ times) and deletions 
+($1.72$ times); with respect to a red-black tree, it is faster on all operations (the red-black tree takes up to $28$\% more time) except for deletions, where it is 
+$1.35$ times slower.
+When considering a set with a billion elements, the signed z-fast trie is faster than both comparison-based structures on all operations:
+with respect to a B-tree, it is more than two times faster on queries ($2.1$ to $2.4$ times), $1.56$ times faster on insertions,
+and $1.21$ times faster on deletions; with respect to a red-black tree, it is from $2.07$ to $2.56$ times faster.
+In this case comparisons
+are costly, and each comparison performed by a comparison-based structure accesses a different string, whereas the z-fast trie 
+accesses hash-table entries and nodes of bounded size, and compares the query with strings in the set only at the end of the search. 
+\todo[inline]{Placeholder: a section on the Rust implementation and its benchmarks goes here.}
 
 
 \begin{table}
@@ -1958,10 +2214,10 @@ Delete &       947&485&236\\
 \begin{tabular}{lrrr}
 &\multicolumn{1}{c}{z-fast trie}&\multicolumn{1}{c}{red-black tree}&\multicolumn{1}{c}{B-tree}\\
 \hline
-Add &          4246&6795&1905\\
-Contains$^+$ & 3261&6139&1733\\
-Contains$^-$ & 3294&6529&1704\\
-Predecessor &  3299&6751&1699\\
+Add &          4247&6795&1905\\
+Contains$^+$ & 3261&6139&1734\\
+Contains$^-$ & 3294&6530&1704\\
+Predecessor &  3299&6751&1700\\
 Delete &       4527&7619&1750\\
 \end{tabular}
 \caption{\label{tab:intb}Timings in nanoseconds for basic operations on a set of 8 billion random $64$-bit integers.}
@@ -1975,10 +2231,10 @@ Delete &       4527&7619&1750\\
 \begin{tabular}{lrr}
 &\multicolumn{1}{c}{z-fast trie}&\multicolumn{1}{c}{B-tree}\\
 \hline
-Add &          1295&1047\\
+Add &          1296&1048\\
 Contains$^+$ & 1195&1105\\
 Contains$^-$ & 1194&1019\\
-Predecessor &  1183&1016\\
+Predecessor &  1183&1017\\
 Delete &       1610&1013\\
 \end{tabular}
 \caption{\label{tab:intbb}Timings in nanoseconds for basic operations on a set of 32 billion random $64$-bit integers using large memory pages.}
@@ -1992,11 +2248,11 @@ Delete &       1610&1013\\
 \begin{tabular}{lrrr}
 &\multicolumn{1}{c}{z-fast trie}&\multicolumn{1}{c}{red-black tree}&\multicolumn{1}{c}{B-tree}\\
 \hline
-Add &          1741&1288&1780\\
-Contains$^+$ & 1307&1532&1437\\
-Contains$^-$ & 1421&1579&1814\\
-Predecessor &  1453&1547&1832\\
-Delete &       2162&1255&1607\\
+Add &          1741&1780&1288\\
+Contains$^+$ & 1307&1437&1532\\
+Contains$^-$ & 1421&1814&1579\\
+Predecessor &  1453&1832&1547\\
+Delete &       2162&1607&1255\\
 \end{tabular}
 \caption{\label{tab:urlsm}Timings in nanoseconds for basic operations on a set of one million URLs from
 the \texttt{eu-2015} crawl.}
@@ -2009,11 +2265,11 @@ the \texttt{eu-2015} crawl.}
 \begin{tabular}{lrrr}
 &\multicolumn{1}{c}{z-fast trie}&\multicolumn{1}{c}{red-black tree}&\multicolumn{1}{c}{B-tree}\\
 \hline
-Add &          4458&6936&10044\\
-Contains$^+$ & 3444&7261&7686\\
-Contains$^-$ & 3390&8017&8676\\
-Predecessor &  3794&8120&8701\\
-Delete &       5621&6798&11652\\
+Add &          4458&10045&6937\\
+Contains$^+$ & 3444&7686&7261\\
+Contains$^-$ & 3391&8677&8018\\
+Predecessor &  3795&8701&8121\\
+Delete &       5622&11652&6798\\
 \end{tabular}
 \caption{\label{tab:urlsb}Timings in nanoseconds for basic operations on a set of one billion URLs from
 the \texttt{eu-2015} crawl.}
