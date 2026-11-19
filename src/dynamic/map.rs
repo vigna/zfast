@@ -320,7 +320,10 @@ mod tests {
             assert_eq!(map.find(sig, 0, |n| n == node), Some((node as usize, node)));
             assert_eq!(map.find(sig, node as usize + 1, |n| n == node), None);
             map.replace(sig, node, node + 1000, 7);
-            assert_eq!(map.find(sig, 0, |n| n == node + 1000), Some((7, node + 1000)));
+            assert_eq!(
+                map.find(sig, 0, |n| n == node + 1000),
+                Some((7, node + 1000))
+            );
         }
         map.check();
         assert_eq!(map.iter().count(), naive.len());

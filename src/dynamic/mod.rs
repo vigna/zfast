@@ -592,9 +592,9 @@ impl<H: HashPrefixes> ZFastTrie<H> {
             let hasher = H::hasher(x, b, self.seed);
             while a < b {
                 let f = two_fattest(a, b);
-                let found =
-                    self.map
-                        .find(hasher.hash(f) & self.sig_mask, f, |id| self.handle_is(id, x, f));
+                let found = self.map.find(hasher.hash(f) & self.sig_mask, f, |id| {
+                    self.handle_is(id, x, f)
+                });
                 match found {
                     Some((extent, id)) => {
                         a = extent;
@@ -710,7 +710,9 @@ impl<H: HashPrefixes> ZFastTrie<H> {
                 // In this interval all probes are successful
                 let (extent, id) = self
                     .map
-                    .find(hasher.hash(f) & self.sig_mask, f, |id| self.handle_is(id, x, f))
+                    .find(hasher.hash(f) & self.sig_mask, f, |id| {
+                        self.handle_is(id, x, f)
+                    })
                     .expect("missing handle");
                 debug_assert!(extent <= b);
                 a = extent;
@@ -1241,7 +1243,10 @@ impl<H: HashPrefixes> ZFastTrie<H> {
         };
 
         let leaf = self.new_leaf(x);
-        let (leaf_byte, exit_byte) = (sym.saturating_sub(1) as u8, exit_sym.saturating_sub(1) as u8);
+        let (leaf_byte, exit_byte) = (
+            sym.saturating_sub(1) as u8,
+            exit_sym.saturating_sub(1) as u8,
+        );
         let mut children = Children {
             ids: [NONE; INLINE],
             bytes: [0; INLINE],
@@ -1252,11 +1257,7 @@ impl<H: HashPrefixes> ZFastTrie<H> {
         // of the exit node it inherits also its jump; otherwise, its jump
         // length is not larger than the handle length of the exit node.
         let inherited = |trie: &Self, side| {
-            if cut_low {
-                trie.jump(exit, side)
-            } else {
-                exit
-            }
+            if cut_low { trie.jump(exit, side) } else { exit }
         };
         let (jump_left, jump_right) = match side {
             Side::Left => {
@@ -1418,7 +1419,8 @@ impl<H: HashPrefixes> ZFastTrie<H> {
         // the handle of the parent and that of the other node
         if other_is_internal {
             let node = self.internal(other);
-            let (other_handle_len, other_extent_len) = (node.handle_len(), node.extent_len as usize);
+            let (other_handle_len, other_extent_len) =
+                (node.handle_len(), node.extent_len as usize);
             if handle_len == 0 || handle_len.trailing_zeros() > other_handle_len.trailing_zeros() {
                 self.map
                     .remove(self.sig(node.key(), other_handle_len), other);

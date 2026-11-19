@@ -18,7 +18,7 @@ use sux::traits::{IndexedDict, IndexedSeq, Pred, PredUnchecked, Succ, SuccUnchec
 /// Marks an empty slot (in the `off` field).
 const EMPTY: u32 = u32::MAX;
 /// The default seed.
-const SEED: u64 = 0x5EED_0F_2FA5_7;
+const SEED: u64 = 0x05EE_D0F2_FA57;
 
 /// A slot of the z-map: it is self-contained, in the sense that fat binary
 /// search never needs to access anything else.
