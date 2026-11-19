@@ -125,6 +125,7 @@
 \newcommand{\rsem}{\mathclose{]\!]}}
 \newcommand{\sat}[2]{\lsem #2 \rsem_{#1}}
 
+\let\dotaccent=\. % The dot accent, which we are about to redefine (it is used in the bibliography)
 \def\..{\,\mathpunct{\ldotp\ldotp}} % Middle stuff for intervals. Usage: \..
 
 \newcommand{\ebsuff}{\trianglelefteq}
@@ -240,12 +241,16 @@ fusion trees~\cite{FrWSITBFT}, which provide asymptotically faster alternatives
 for large collections.
 
 In this paper, we revisit the classical dynamic predecessor/successor problem on a
-set $S$ of size $n$ from a universe of strings of length $\ell$. The static
+set $S$ of size $n$ from a universe of strings of length $\ell$. For strings
+that fit in a machine word, the static
 version of this problem has been completely solved, with matching upper and
-lower bounds~\cite{PaTRDNHSP}. If only linear space is available, in a significant
-number of cases variants of the van Emde Boas tree~\cite{EKZDIEPQ} that answer in time $O(\lg\ell)$ are
-optimal even in the static setting using randomization. Among such variants we
-quote Willard's \emph{y-fast trie} and Mehlhorn and N\"aher's
+lower bounds~\cite{Patrascu2006Timespace,PaTRDNHSP}, and so has the dynamic version, 
+in expectation~\cite{Patrascu2014Dynamic}. If only linear space is available, in a significant
+number of cases, which include polynomial universes, 
+variants of the van Emde Boas tree~\cite{EKZDIEPQ} that answer in time $O(\lg\ell)$ are
+optimal even in the static setting using randomization (see Section~\ref{sec:related} for a precise statement). 
+Among such variants we
+quote Willard's \emph{y-fast trie}~\cite{WilLLWRQ} and Mehlhorn and N\"aher's
 structure~\cite{MeNBOD}, which uses dynamic perfect hashing~\cite{DKMDPHULB}. 
 
 These two solutions are both two-level data structures using buckets;
@@ -262,8 +267,10 @@ machine word) of variable length.
 %undergoes major modifications.
 
 The data structure discussed in this paper, the \emph{z-fast trie}, can
-be thought of as the first simple optimal digital data structure that is neither
-recursive nor needs to use bucketing to achieve optimal time and linear space.
+be thought of as the first simple dynamic digital data structure that attains the $O(\lg\ell)$ bound 
+in linear space without being
+recursive and without using buckets; as we recall in Section~\ref{sec:related}, 
+the bound is optimal for sets that are not too small with respect to the word size, but not in general.
 Moreover, we present a simple variant that provides results with high
 probability within the same bounds of the standard version for ``long'' strings, always
 using a number of words linear in $n$ (rather than in the number of bits that is
@@ -271,7 +278,6 @@ necessary to represent $S$). In both cases, our space estimates are \emph{not}
 asymptotic: we can provide \emph{exact} bounds, which amount to about a dozen
 machine words per element.
 
-The name ``z-fast trie'' was used for the first time in~\cite{BBPMMPH}.
 A preliminary version of this paper appeared in~\cite{BBVDZT}.
 The structure described in this paper is inspired by the idea of \emph{fat
 binary search} introduced therein, but has little else in common. In particular,
@@ -287,8 +293,8 @@ pointers: on leaves, the additional pointers are used to keep track of the origi
 a doubly linked list); on internal nodes, the pointers make it possible to move
 quickly to the farthest left/right descendant.
 
-The z-fast trie can answer
-optimally a number of other queries, such as predecessor/successor queries, prefix queries, and range queries.
+The z-fast trie can answer within the same kind of bounds
+a number of other queries, such as predecessor/successor queries, prefix queries, and range queries.
 The main combinatorial results we prove (Theorems~\ref{th:parex}
 and~\ref{th:fatanc}) 
 highlight a deep connection between jump pointers and fat
@@ -312,9 +318,12 @@ Standard prefix (range, respectively) queries report the set of strings
 interval $[x\..y)$, respectively).
 
 We work in the standard RAM model with a word of length $w$, allowing
-multiplications\todo{Seba: Do we really need multiplications? Apparently they were useful only to get constant-time MSB computation.}, under a full randomness assumption\footnote{We remark that hash functions 
-are only used to implement a hash table and to compute signatures in the ``long
-string'' case.}. We also discuss results in the \emph{cache-oblivious} model~\cite{FLPCOA}, which
+multiplications\todo{Seba: Do we really need multiplications? Apparently they were useful only to get constant-time MSB computation.}. 
+Hash functions are used only to implement a dictionary and, in the ``long
+string'' case, to compute signatures: for the former we make the assumptions required by the dictionary of choice, 
+and for the latter we use polynomial hashing (see Section~\ref{sec:dict}). 
+In particular, the answers to queries are always correct: only running times are subject to probabilistic bounds. 
+We also discuss results in the \emph{cache-oblivious} model~\cite{FLPCOA}, which
 analyses RAM algorithms in the I/O model using an ideal cache replacement
 strategy.
 
@@ -368,60 +377,203 @@ with linear probing they hold in expectation.
 We remark that the only reason of having expectations in
 the update bounds is the presence of a dictionary: improvements in
 dynamic dictionaries reflect immediately in improvements to the z-fast trie
-time and space bounds.
+time and space bounds. For example, there are dictionaries using linear space in which all operations take constant time 
+with high probability~\cite{Arbitman2010Backyard}.
 
-To our knowledge, this is the first paper to propose a digital data structure for
-variable length strings with optimal performance in the RAM model and good
-performance in the cache-oblivious model. Nonetheless, we stress the fact that
+To our knowledge, the z-fast trie is the first dynamic digital data structure for
+variable-length strings whose bounds in the RAM model and in the cache-oblivious model 
+depend only on the length of the strings involved, and not on $n$; in the static case, the same bounds for
+predecessor search had been obtained, deterministically, 
+by Ru\v{z}i\'c~\cite{Ruzic2007Making,Ruzic2009Making} (see Section~\ref{sec:related}). 
+We stress, however, the fact that
 the main feature of z-fast tries is that they are simple data structures
 which can be actually implemented, and that the space usage is just about a dozen
 machine words per element, independently of the string length. A complete
 implementation is distributed under the GNU Lesser General Public
 License as part of the Sux4J Java library.\footnote{\url{https://sux4j.di.unimi.it/}}
 
-\noindent\textbf{Previous work.} \todo{This certainly needs to be updated.} From a RAM perspective, several structures
-already provide optimal bounds both in terms of $n$ (e.g., Andersson and
-Thorup~\cite{AnTDOSEST} achieve $O(\sqrt{\lg n/\lg\lg n})$ update/query
-time) and in terms of the string length for fixed-length strings (e.g., y-fast tries~\cite{WilLLWRQ}).
-The main contribution of the z-fast trie is that it is a simple
-structure that can be easily implemented, and that it works with variable-length strings
-longer than $O(w)$.
+The name ``z-fast trie'' was used for the first time in~\cite{BBPMMPH}. In Section~\ref{sec:related}
+we discuss in detail the relationships with previous work, and the work that followed the preliminary 
+version of this paper~\cite{BBVDZT}.
 
-Andersson and Thorup note that by using a trie on the alphabet $2^w$ and some
-very careful bookkeeping it is possible to achieve $O(|x|/w + \sqrt{\lg
-n/\lg\lg n})$ time by storing in each node of the trie a predecessor
-structure.\footnote{Using other kinds of digital structures (e.g., the structure
-described in this paper) it would be possible to achieve similarly
-$O(|x|/w + \lg w)$, but this is of little advantage as $O(|x|/w+\lg
-|x|)=O(|x|/w+\lg(|x|/w)+\lg w)=O(|x|/w+\lg w)$.}
-Although in principle this solution would be faster in the
-RAM model than ours (for sufficiently small sets), in the
-cache-oblivious model it would require $O(|x|/w + \sqrt{\lg
-n/\lg\lg n})$ I/Os---in most cases worse than the $O(|x|/B
-+\lg\max\{\?|x|,|x^+|,|x^-|\?\})$ I/Os achieved by our data structure. Moreover,
+\section{Related work}
+\label{sec:related}
+
+\paragraph{Predecessor search on integers.} For $n$ integers of $\ell\leq w$ bits, van Emde Boas 
+trees~\cite{EKZDIEPQ} answer predecessor queries and perform updates in time $O(\lg \ell)$, 
+but use space depending on the size of the universe. Willard's \emph{x-fast trie}~\cite{WilLLWRQ} 
+stores all prefixes of all keys in hash tables, one for each prefix length, and finds 
+the longest prefix of a query that is a prefix of some key by a binary search on the prefix length; 
+the \emph{y-fast trie}~\cite{WilLLWRQ} brings space down to linear by storing the keys in buckets of 
+$\Theta(\ell)$ consecutive keys and indexing one key per bucket with an x-fast trie, at the price of amortized 
+bounds for updates. Mehlhorn and N\"aher~\cite{MeNBOD} obtain similar results from the recursion of 
+van Emde Boas using dynamic perfect hashing~\cite{DKMDPHULB}, and need buckets to attain linear space. 
+All these structures reduce the \emph{length} of the keys, 
+and their time bounds do not depend on $n$. The other approach reduces the \emph{number} of keys: fusion
+trees~\cite{FrWSITBFT} answer queries in time $O(\lg n/\lg w)$, and the exponential search trees of 
+Andersson and Thorup~\cite{AnTDOSEST} provide deterministic, worst-case bounds in linear space for
+queries and updates, such as $O\bigl(\sqrt{\lg n/\lg\lg n}\bigr)$, which is optimal as a function of $n$ alone~\cite{Beame2002Optimal}.
+
+P\v{a}tra\c{s}cu and Thorup settled the static problem~\cite{Patrascu2006Timespace,PaTRDNHSP}, providing 
+matching upper and lower bounds for every combination of $n$, $\ell$, $w$ and of the available space. 
+In particular, they note that when $w=\ell=\gamma\lg n$ for some $\gamma>1$ (i.e., for polynomial universes) and 
+space is near linear the optimal search time is $\Theta(\lg \ell)$, so van Emde Boas trees and their variants are optimal. 
+More recently, the same authors settled the dynamic problem~\cite{Patrascu2014Dynamic}: 
+they describe a deterministic dynamic fusion tree using linear space and supporting queries (also rank and select) and updates in time 
+$O(\lg n/\lg w)$, which implies constant time for sets of size $w^{O(1)}$, and they show that in linear space the optimal expected 
+operation time (i.e., the maximum between query and update time) for dynamic predecessor search is, up to constant factors, 
+\[
+\max\biggl\{\?1,\min\biggl\{\?\frac{\lg n}{\lg w},
+\,\frac{\lg\frac{\ell}{\lg w}}{\lg\Bigl(\lg\frac{\ell}{\lg w}\bigm/\lg\frac{\lg n}{\lg w}\Bigr)},
+\,\lg\frac{\lg(2^\ell-n)}{\lg w}\?\biggr\}\?\biggr\}.
+\]
+The lower bound holds in the cell-probe model, also for randomized structures; the upper bounds corresponding 
+to the last two terms are in expectation, as they use hashing. 
+For $\ell=w$ it is immediate to check that the bound above is $\Theta(\lg w)$ exactly when $\lg n=w^{\Omega(1)}$ and
+$\lg(2^w-n)=w^{\Omega(1)}$: this happens, for example, when $w=\Theta(\lg n)$ and the universe is polynomial in $n$.
+In this range the $O(\lg \ell)$ bound of the z-fast trie is thus optimal (in the same sense: in expectation, and for 
+the maximum between query and update time), whereas it is not optimal for smaller sets: 
+for instance, when $n=w^{O(1)}$ constant time is possible. 
+The structures of~\cite{Patrascu2014Dynamic} work for keys that fit in a machine word, and those 
+attaining the last term of the bound are, once again, y-fast tries (with dynamic fusion nodes in the buckets); 
+whether the dynamic bounds can be attained with high probability, or deterministically, is open~\cite{Navarro2020Predecessor}.
+
+The survey by Navarro and Rojas-Ledesma~\cite{Navarro2020Predecessor} provides a complete account of this line of 
+research, and presents the z-fast trie as the version of the x-fast trie that attains linear space without buckets, 
+using a compacted trie, a single hash table, and one prefix per node. Some of the theoretical structures above have been
+engineered: Dinklage, Fischer and Herlez~\cite{Dinklage2021Engineering} evaluate dynamic predecessor structures for keys of $32$, 
+$40$ and $64$ bits, including variants of y-fast tries and dynamic fusion nodes.
+
+Other queries on integers are easier than predecessor search: for instance, Mortensen, Pagh and P\v{a}tra\c{s}cu~\cite{Mortensen2005Dynamic} 
+show that one can report an element of a query interval (i.e., answer existential range queries, and thus existential prefix
+queries) in time $O(\lg\lg w)$ with updates in time $O(\lg w)$. The z-fast trie answers 
+such queries within the bounds of predecessor search, and thus not optimally.
+Finally, a few structures provide bounds for predecessor search that depend on the distance $\Delta$ between the query and the answer,
+rather than on the length of the keys: Bose \textit{et al.}~\cite{Bose2013Fast} attain $O(\lg\lg\Delta)$ expected time, but not linear space; 
+the same query time is obtained in the static case by applying fat binary search to a suitably restricted interval~\cite{Belazzougui2012Predecessor},
+and in the dynamic case, in linear space, by the $\Delta$-fast tries of Ehrhardt and Mulzer~\cite{Ehrhardt2017Delta}, which the survey~\cite{Navarro2020Predecessor} describes as a variant of the z-fast trie. 
+Cohen \textit{et al.}~\cite{Cohen2015Minimal} use small z-fast tries as a component of a static index of $O(n\lg w)$ bits that answers successor queries 
+with a constant number of accesses to the keys.
+
+\paragraph{Binary search on prefix lengths.} The idea of locating the longest prefix of a query that appears in a set of strings by a binary search on its \emph{length}, 
+using hashing to test whether a prefix appears, goes back to x-fast tries~\cite{WilLLWRQ}; it was rediscovered in the context 
+of IP routing by Waldvogel \textit{et al.}~\cite{Waldvogel1997Scalable}, who use a hash table for each prefix length. 
+For the search to work, a failed probe must imply that no longer prefix exists: x-fast tries achieve this by storing 
+\emph{all} prefixes of all keys, whereas Waldvogel \textit{et al.}~store, for each string of the set, a \emph{marker} at each length that a binary search might probe 
+before reaching the length of the string, which means up to $\lg L$ markers for strings of length at most $L$. 
+In both cases the number of entries stored per string depends on the length of the strings. 
+The z-map, instead, contains a single entry for each internal node of the compacted trie: the handle, whose length 
+is the $2$-fattest number in the skip interval of the node. In fact, the lengths at which Waldvogel \textit{et al.}~place 
+the markers for a string of length $l$ are obtained by clearing, one at a time, the lowest bits set in $l$, 
+and the handle length of a node whose extent has length $l$ is the last number of this sequence (starting from $l$ itself) that
+belongs to the skip interval: the fat binary search described in this paper makes the search work with this entry only.
+
+The first structure of this kind for variable-length strings is due to Ru\v{z}i\'c~\cite{Ruzic2007Making,Ruzic2009Making}, 
+who gives a static, deterministic predecessor structure storing a set of binary strings of overall length $N$ in $O(N)$ bits and answering queries in time $O(|x|/w+\lg|x|)$, and 
+in $O(|x|/B+\lg|x|)$ I/Os in the cache-oblivious model.\footnote{These are the bounds of the journal version~\cite{Ruzic2009Making};
+the bounds of the conference version~\cite{Ruzic2007Making} have additional additive terms.} 
+His structure adapts the recursion of van Emde Boas to variable-length keys using one dictionary for each power of two, in such a way 
+that each edge of the compacted trie is represented in one dictionary only, and it is based on deterministic signature functions. 
+The static z-fast trie~\cite{BBPMMPH,Belazzougui2010Fast}, which was developed independently~\cite{Navarro2020Predecessor}, uses instead a single dictionary indexed by handles.
+The bounds of Ru\v{z}i\'c for predecessor search are the same as those of Theorem~\ref{th:boundslong} for membership, and they 
+are better than ours when the predecessor or the successor of the query are much longer than the query; on the other hand, his structure is 
+static, recursive and uses buckets.
+
+\paragraph{Strings in the RAM model.} Comparison-based dynamic structures for strings
+have bounds of the form $O(|x|/w+\lg n)$; a recent example with a very small amount of additional information per node is given by 
+zip-tries~\cite{Eppstein2025Ziptries}. Andersson and Thorup~\cite{AnTDOSEST} show that if the longest common 
+prefix between a string $x$ and the strings in the set is $l$ words long, one can search, insert and delete $x$ in time 
+$O\bigl(l + \sqrt{\lg n/\lg\lg n}\bigr)$, deterministically and in the worst case, using a number of words linear in $n$ 
+in addition to the strings: they use a trie on the alphabet $2^w$ in which each node is endowed with a predecessor structure.\footnote{Using 
+in the nodes other kinds of predecessor structures it is possible to trade the term depending on $n$ for a term depending on $w$, but this is of little advantage 
+with respect to our bounds, as $O(|x|/w+\lg|x|)=O(|x|/w+\lg(|x|/w)+\lg w)=O(|x|/w+\lg w)$.}
+In the RAM model this solution is faster than ours for sufficiently small sets; in the
+cache-oblivious model, however, it requires an I/O for each word of the common prefix, which in most cases is worse than the 
+$O(|x|/B +\lg\max\{\?|x|,|x^+|,|x^-|\?\})$ I/Os of our data structure. Moreover,
 the construction is rather involved; finally, while the $O(|x|/w)$ term in our
 bound is simply due to the evaluation of a hash function and some bit-vector
-comparisons, the $O(|x|/w)$ term in the trie technique depends on $|x|/w$
+comparisons, the analogous term in the trie technique is due to 
 accesses to dictionaries, an operation that in practice is orders of magnitude slower.
 
-In the I/O model, string B-trees and their
-variants~\cite{FeGSBT} provide predecessor/successor queries using
-$O(|x|/B+\lg_B n)$ I/Os. We remark that this bound is in general incomparable to ours. Finally, note
-that the RAM time bound in this case is essentially always worse than ours.
+Several results take the size $\sigma$ of the alphabet into account. Fischer and Gawrychowski~\cite{Fischer2015Alphabet} 
+describe a deterministic compacted trie that answers prefix and predecessor queries for a pattern of $m$ characters in time $O(m+\lg\lg\sigma)$, 
+and a dynamic variant with a slightly larger additive term; characters, however, are handled one at a time. 
+Bille, G{\o}rtz and Skjoldjensen~\cite{Bille2017Deterministic} give a static, deterministic index for a packed string
+with query time $O(m/\alpha+\lg m+\lg\lg\sigma)$, where $\alpha=w/\lg\sigma$ is the number of characters in a word, which is the shape of 
+our bound for long strings. After the preliminary version of this paper appeared, hash-based dynamic tries working on packed strings have been proposed: 
+the packed compact tries of Takagi \textit{et al.}~\cite{Takagi2017Packed} support prefix search and updates in expected time $O(m/\alpha+f)$, 
+where $f$ is the time bound of any dynamic predecessor structure of suitable size, giving, for instance, $O(m/\alpha+\lg\lg n)$; the \textit{c-trie++} of 
+Tsuruta \textit{et al.}~\cite{TKKctriepp} combines a variant of the z-fast trie that takes the alphabet into account, used on strings that fit in a word, 
+with packed compact tries, and supports lookups, prefix searches and updates in expected time $O(m/\alpha+\lg\alpha)$. 
+The bounds of these structures are incomparable with ours (for instance, $\lg\lg n$ is smaller than $\lg|x|$ on long strings, and larger on short ones, 
+and the term $\lg\alpha$ is smaller than $\lg|x|$ on large alphabets); they hold in expectation, 
+and the operations provided do not include predecessor/successor or range queries. 
+We remark that both~\cite{Takagi2017Packed} and~\cite{Eppstein2025Ziptries} describe the (signed) z-fast trie as a structure whose \emph{answers} are correct with high probability: 
+this is not the case, as answers are always correct, and it is the running time that is bounded with high probability (see Section~\ref{sec:sign}).
 
-After the preliminary version of this paper~\cite{BBVDZT} appeared, the z-map and fat binary search 
-have been extended to compacted tries on arbitrary alphabets and applied to suffix 
-arrays~\cite{BoVKNDLSM,BMVEZA}. Tsuruta \textit{et al.}~\cite{TKKctriepp} combine a 
-variant of the z-fast trie that takes the alphabet into account with packed 
-compacted tries on short strings to obtain a dynamic keyword dictionary. 
-Wormhole~\cite{WNJWormhole}, an ordered in-memory index, is also based on a binary search on prefix lengths,
-but it stores in a hash table all the prefixes of the keys it uses to separate its leaves,
-whereas the z-map contains one handle per internal node.
-\todo[inline]{Related work still to be updated by the authors: the discussion of 
-optimal bounds predates P\v{a}tra\c{s}cu and Thorup's dynamic predecessor structure with optimal 
-query time (2014), which is not in the bibliography; the claims ``first simple optimal digital data structure'' 
-and ``first paper to propose\dots'' above should be reconsidered in that light, and a comparison
-with dynamic string dictionaries (packed compact tries and their successors) is missing.}
+We are not aware of lower bounds specific to variable-length strings, beyond the $\Omega(|x|/w)$ time 
+necessary to read the query and the lower bounds for strings of one word, which, as noted in~\cite{AnTDOSEST}, apply by padding: 
+thus, the discussion above about the optimality of the term $\lg|x|$ on integers applies to strings as well, 
+and nothing is known about the terms depending on $|x^-|$ and $|x^+|$.
+
+\paragraph{Strings in external memory.} In the I/O model, string B-trees~\cite{FeGSBT} provide predecessor and successor queries, and updates, using
+$O(|x|/B+\lg_B n)$ I/Os, but they depend on the knowledge of $B$. In the cache-oblivious model, the same bound is obtained for prefix queries on a static set
+by Brodal and Fagerberg~\cite{Brodal2006Cacheoblivious}, and bounds of the same form are obtained by the cache-oblivious string B-trees of
+Bender, Farach-Colton and Kuszmaul~\cite{Bender2006Cacheoblivious}, which are dynamic. 
+These bounds are in general incomparable to ours, which do not depend on $n$: we replace $\lg_B n$ with the logarithm of the length of the strings involved. 
+As we already remarked, the structure of Ru\v{z}i\'c~\cite{Ruzic2009Making} has the same I/O bounds as ours for queries in the static case.
+Finally, note
+that the RAM time bound of structures based on B-trees is essentially always worse than ours.
+
+\paragraph{Ordered indices for main memory.} Several data structures engineered for main-memory databases and key-value stores 
+provide ordered access to variable-length keys. Tries with adaptive node layouts, such as ART~\cite{Leis2013Adaptive}, 
+Masstree~\cite{Mao2012Cache} (a trie whose nodes are B$^+$-trees indexing eight bytes of the keys) and HOT~\cite{Binna2018HOT} (a binary Patricia trie whose nodes are 
+grouped into compound nodes of bounded fanout so as to minimize the height), perform a number of steps proportional to the depth of the trie.
+The Cuckoo Trie~\cite{Zeitak2021Cuckoo} stores the nodes of a trie in a hash table indexed by the string associated with each node, as we do, 
+but descends the trie level by level, prefetching the nodes of the next few levels so that the associated cache misses overlap. 
+Current B-trees for strings truncate the prefixes common to all keys of a node 
+and use short separators~\cite{Bayer1977Prefix}, and they store in each node a few bytes of the keys after the common prefix, and hash-based fingerprints, so as to avoid accessing the keys~\cite{Muller2025BTrees,Chen2025FB}; 
+learned indices for strings have been proposed, too~\cite{Spector2021Bounding,Yang2024LITS}. 
+
+The structure closest to ours is Wormhole~\cite{WNJWormhole}: the keys are stored in a linked list of leaves containing at most $128$ keys, 
+each leaf is associated with a short string, its \emph{anchor}, that separates its keys from those of the previous leaf, 
+and all the prefixes of all anchors are stored in a hash table; the leaf associated with a key is found by a binary search on the prefix length, 
+which uses short hashes as signatures and performs a single string comparison at the end, as we do in Section~\ref{sec:sign}. 
+The authors credit Waldvogel \textit{et al.}~\cite{Waldvogel1997Scalable} for the binary search on prefix lengths; x-fast, y-fast and z-fast tries are not mentioned. 
+In fact, the organization of Wormhole is that of a y-fast trie for variable-length strings of bytes: buckets of keys, 
+and a structure storing all prefixes of one representative per bucket. 
+Since a hash table contains all the prefixes of the anchors, the number of its entries, and the cost of splitting a leaf, depend on the 
+length of the anchors, whereas a z-map on the same anchors would contain one entry per anchor. On the other hand, as all prefixes are present 
+a plain bisection suffices. As only one string per leaf is indexed, the hash table is a small fraction of the whole index~\cite{WNJWormhole}; 
+the same approach can of course be applied to z-fast tries. 
+The z-fast trie has also been used as a building block of a trie for the processing-in-memory model~\cite{Kang2023PIM}.
+
+\paragraph{Uses of z-fast tries.} After~\cite{BBPMMPH,Belazzougui2010Fast,BBVDZT}, z-fast tries (in most cases, the static 
+version, often with signatures given by Karp--Rabin fingerprints and a final verification) have been used as a component of several other data structures: 
+\begin{itemize}
+\item in text indices based on Lempel--Ziv parsings, grammars, and other forms of dictionary compression, to locate 
+in time logarithmic in the length of a pattern the node of a compacted trie of phrase boundaries associated with each way of splitting the 
+pattern~\cite{Gagie2012Faster,Bille2018Time,Christiansen2018Compressed,Navarro2019Universal,Christiansen2021Optimal,Tsuruta2020Grammar,Gagie2024Space,Kosolobov2026Compressed} (see 
+also the survey~\cite{Navarro2021Indexing});
+\item in indices based on suffix arrays and their samplings: the z-map and fat binary search have been 
+extended to compacted tries on arbitrary alphabets and applied to suffix 
+arrays~\cite{BoVKNDLSM,BMVEZA}, and z-fast tries are used in the theoretical results on suffixient sets and arrays and on related indices~\cite{Depuydt2023Suffixient,Cenzato2026Suffixient,Becker2026Compressing};
+\item through \emph{weak prefix search}~\cite{Belazzougui2010Fast}, as a way of descending a trie by several symbols in constant 
+time~\cite{Navarro2017Time,Gagie2020Fully}, as a compact index of the factors of a text~\cite{Belazzougui2015Improved}, or to test 
+the emptiness of a range in small space~\cite{Belazzougui2021Range,Goswami2015Approximate};
+\item in streaming algorithms for dictionary matching~\cite{Clifford2015Dictionary,Gawrychowski2022Streaming};
+\item in algorithms that compute parsings in compressed space, which use the dynamic structure described in this paper~\cite{Badkobeh2017Two} or fat binary search~\cite{Kempa2017LZ};
+\item in monotone minimal perfect hashing~\cite{BBPMMPH,Belazzougui2011Theory}, where a z-fast trie on a subset of the keys is used to distribute the keys into buckets: 
+the resulting functions use $O(n\lg\lg\lg u)$ bits for a universe of size $u$, which has been shown to be optimal~\cite{Assadi2023Tight,Kosolobov2024Simplified}, 
+and they are still used as a reference in experimental work~\cite{Ferragina2023Learned}.
+\end{itemize}
+
+\paragraph{Static dictionaries of strings.} When the set of strings is static and space is the main concern, the structures of choice are
+compressed representations such as front coding with a binary search on sampled strings~\cite{MartinezPrieto2016Practical}, 
+path-decomposed tries~\cite{Grossi2015Fast}, and succinct tries~\cite{Zhang2020Succinct,Boffa2024CoCo}; these structures use a fraction of the space of the strings, 
+and are out of the scope of this paper. We just note that the binary search of a front-coded list is the kind of search that a z-fast trie on 
+the sampled strings can replace. The measurements of a z-fast trie reported in the literature we are aware of (e.g.,~\cite{TKKctriepp,Kanda2020Dynamic,Zhang2026C2}) 
+use a C++ port of our Java implementation, which works on bits and stores one key per leaf.
 
 \section{Notation and tools}
 \label{sec:notation}
@@ -1229,30 +1381,37 @@ The only important property we must preserve, which is necessary for Theorem~\re
 the correct answer on the signature of an existing handle. For the moment, let us assume that
 there are no duplicate signatures (i.e., that all handles have distinct signatures).
 
-Signatures of handles are computed at construction/insertion time,
+Signatures are computed by polynomial hashing~\cite{Dietzfelbinger1992Polynomial}, as in~\cite{Belazzougui2010Fast}. Let $L\leq 2^w$ be a bound on the length of the 
+strings, $p>2^w$ a prime, and $a$ an element of $\mathbf Z_p$ chosen uniformly at random (independently of the strings in $S$ and of the queries). We see a string $x$ 
+as a sequence of words $x_0$, $x_1$, $\dots\,$,~$x_{d-1}$ of $w$ bits, where $d=\lceil |x|/w\rceil$ and the last word is padded with zeroes, and we define its signature as 
+$H_d$, where $H_0=0$ and $H_{i+1}=(aH_i+x_i)\bmod p$. Signatures of handles are computed at construction/insertion time,
 whereas signatures for prefixes of the query string $x$ can be computed incrementally: after a
-preprocessing using time $O(|x|/w)$ and $O(|x|/B)$ I/Os, computing a signature
-for an arbitrary prefix of $x$ takes constant time.
+preprocessing using time $O(|x|/w)$ and $O(|x|/B)$ I/Os, in which we compute and store the values $H_i$, computing a signature
+for an arbitrary prefix of $x$ takes constant time, as one has just to apply the recurrence to $H_{\lfloor f/w\rfloor}$ and to the 
+last $f\bmod w$ bits of a prefix of length $f$. 
+The signatures of two distinct strings \emph{of the same length} $l$ are the values in $a$ of two distinct polynomials of degree smaller than $\lceil l/w\rceil$ with 
+coefficients in $\mathbf Z_p$, so they are the same with probability at most $\lceil l/w\rceil/p\leq 2L/(wp)$ (we assume without loss of generality $L\geq w$). Strings of different length
+are instead told apart by their length: recall that an entry of the z-map is returned only if the length of its handle is the length of the prefix we are looking for.
 
-Assuming we have signatures of length $c\lg n + \lg w$, 
+Assuming $p\geq 2Ln^c$, so that signatures have length $c\lg n + \lg L+O(1)$, 
 it is easy to see that the probability of completing a query (which performs at most
 $w+2$ probes on input $x$, because $\lg |x| \leq \lg 2^w=w$)
 without getting a false positive is at least $1-3/n^{c-1}$: 
 indeed,  the probability that a given prefix induces a false positive 
-is at most $n/(wn^c)$ (by a union bound on the signatures of the at most $n$ handles), so the 
+is at most $2nL/(wp)\leq 1/(wn^{c-1})$ (by a union bound on the signatures of the at most $n$ handles), so the 
 probability of hitting a false positive in any of the at most $w+2\leq 3w$ probes of a query
-is at most $3/n^{c-1}$.
-\todo[inline]{The analysis above assumes fully random signatures, but at the same time that, after preprocessing,
-the signature of an arbitrary prefix of $x$ can be computed in constant time: the two requirements 
-are not compatible as stated. We should name a concrete family of hash functions with constant-time prefix 
-signatures (e.g., a polynomial or a CRC-like rolling hash) and redo the collision bound 
-for that family, or state the bound under an explicit idealized assumption.}
+is at most $3/n^{c-1}$. Note that the prefixes probed by a query depend on the answers of the z-map, and thus on $a$, only after 
+the first false positive: until then, the execution is the same as that of Algorithm~\ref{algo:exitorparex} with an exact z-map, 
+so it suffices to bound the probability of a false positive on the probes of the latter, which do not depend on $a$.
+\todo[inline]{This analysis replaces the one based on fully random signatures of $c\lg n+\lg w$ bits, which was not compatible 
+with the constant-time computation of the signatures of prefixes; it should be checked by all authors. Note that the implementations 
+use different hash functions, for which no such bound is available.}
 
 Thus,
 Algorithm~\ref{algo:exitorparex} will end with the correct output in time $O(|x|/w +\lg|x|)$ with
-high probability, because of Theorem~\ref{th:errors}. Note that since $n$ is not known in advance, the signatures
-must actually be $cw+\lg w=O(w)$ bits long (we assume, as usual, that the set
-size is at most $2^w$, so $c\lg n\leq cw$).
+high probability, because of Theorem~\ref{th:errors}. Note that since $n$ and $L$ are not known in advance, the signatures
+must actually be $(c+1)w+O(1)=O(w)$ bits long (we assume, as usual, that the set
+size is at most $2^w$, so $c\lg n\leq cw$, and $\lg L\leq w$).
 
 At the end of the algorithm, we just need to check if $h_\beta\preceq x$, where $\beta$ is the node
 on the top of the stack,
@@ -2049,8 +2208,8 @@ an additional pointer to its key: the resulting nodes are shown in Figure~\ref{f
 besides that necessary to store the keys themselves, is $2w+12p$ bits per key, that is, two integers and twelve pointers per key,
 as stated in Theorem~\ref{th:bounds}.
 
-Finally, in the case of the signed z-fast trie we need to store a signature of $cw + \lg w$ bits in each slot of the hash table, 
-yielding $(3c + 2)w + 3\lg w +12p$ bits per key, plus the space necessary to store the keys themselves, as stated in Theorem~\ref{th:boundslong}.
+Finally, in the case of the signed z-fast trie we need to store a signature of $(c+1)w + O(1)$ bits in each slot of the hash table 
+(see Section~\ref{sec:dict}), yielding $(3c + 5)w + O(1) +12p$ bits per key, plus the space necessary to store the keys themselves, as stated in Theorem~\ref{th:boundslong}.
 
 % \subsection{Final representation and space usage evaluation}
 % \label{sec:space}

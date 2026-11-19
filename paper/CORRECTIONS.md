@@ -2,7 +2,9 @@
 
 Changes made with respect to the imported text (commit `8a96615`, Subversion
 r24015), following the review in `review-2026-11/`. Labels refer to
-`dynzfast.tex`. Every algorithm that was changed is implemented literally in
+`dynzfast.tex`; section numbers are those of the text before the section on
+related work was added (the sections after the introduction are now shifted by
+one). Every algorithm that was changed is implemented literally in
 `python/check_updates.py`, which compares the whole structure with its
 definition after every update (`python3 python/check_updates.py`, about half
 a minute; `--quick` for a few seconds).
@@ -147,9 +149,69 @@ All items of section D of `review-2026-11/reports/A-paper-referee.md`.
 
 ## 6. Related work
 
-- The SPIRE 2010 version is cited. One paragraph mentions the z-fast tries on
-  arbitrary alphabets and zuffix arrays, c-trie++ and Wormhole; the four
-  entries were added to `biblio.bib` from local sources.
+Rewritten from the three literature surveys in `related-work/` (which say, for
+each statement, whether the primary source was read). The treatment is now a
+section, "Related work" (`sec:related`), right after the introduction: it had
+grown to seven strands of literature, and the introduction already contains
+the statements of the theorems. The introduction keeps only what is needed to
+state the contribution, with pointers to the section.
+
+- **Organisation of the section.** Predecessor search on integers (length
+  reduction, cardinality reduction, the static and dynamic optimal bounds of
+  Pătraşcu and Thorup, range reporting, distance-sensitive search);
+  binary search on prefix lengths (x-fast tries, Waldvogel et al., Ružić,
+  and what a single handle per node changes); strings in the RAM model;
+  strings in external memory; ordered indices for main memory (ART, Masstree,
+  HOT, Cuckoo Trie, B-trees, learned indices, Wormhole); uses of z-fast tries
+  since 2009, grouped by purpose; static dictionaries of strings.
+- **Claims changed.**
+  - "The static version ... has been completely solved" now cites the STOC
+    2006 paper, too, and says that the dynamic version is solved in
+    expectation (FOCS 2014).
+  - "the first simple optimal digital data structure that is neither
+    recursive nor needs to use bucketing" is now "the first simple dynamic
+    digital data structure that attains the O(lg l) bound in linear space
+    without being recursive and without using buckets", with the remark that
+    the bound is optimal only for sets that are not too small; the section
+    states when: for l = w, exactly when lg n = w^Omega(1) and
+    lg(2^w - n) = w^Omega(1).
+  - "The z-fast trie can answer optimally a number of other queries" is now
+    "within the same kind of bounds": existential range and prefix queries
+    on integers can be answered exponentially faster (Mortensen, Pagh,
+    Pătraşcu).
+  - "under a full randomness assumption" is removed: hashing is used for the
+    dictionary and for signatures, and signatures are now computed by
+    polynomial hashing (see section 4 below).
+  - "the first paper to propose a digital data structure for variable length
+    strings with optimal performance in the RAM model and good performance in
+    the cache-oblivious model" is now "the first dynamic digital data
+    structure for variable-length strings whose bounds ... depend only on the
+    length of the strings involved, and not on n", crediting Ružić
+    (SODA 2007, TALG 2009) for the same bounds in the static, deterministic
+    case. Ružić was not cited before.
+  - The bound of Andersson and Thorup for strings is stated as in their
+    theorem (the common prefix in words, deterministic, worst case).
+  - A sentence in the introduction and one in the section state that answers
+    are always correct and only running times are probabilistic, as two
+    papers describe the structure otherwise.
+- **Signatures** (Section 4.3, `sec:dict`). The analysis assumed fully random
+  signatures of c lg n + lg w bits, which is incompatible with constant-time
+  signatures of prefixes. It now uses polynomial hashing over a prime field
+  (Dietzfelbinger et al., as in the ESA 2010 paper), with signatures of
+  c lg n + lg L + O(1) bits, L a bound on the length of the strings; the
+  probability bounds are unchanged, signatures are (c+1)w + O(1) = O(w) bits
+  when n and L are not known, and the space count of Section 9 becomes
+  (3c+5)w + O(1) + 12p bits per key. The `\todo` asking for a hash family is
+  replaced by one asking all authors to check the new argument.
+- **Bibliography.** 63 entries added from the `.bib` files of the surveys
+  (verified against Crossref, DataCite or arXiv; their verification notes are
+  not printed); the entries of c-trie++ and Wormhole are now the published
+  versions, under the same keys. `\dotaccent` preserves the dot accent, which
+  the paper redefines.
+- **Removed `\todo`s**: "This certainly needs to be updated" and the one on
+  Pătraşcu and Thorup and the "first" claims.
+- `related-work/TO-DOWNLOAD.md` lists the papers that the surveys could not
+  access, in order of importance for the text.
 
 ## 7. Notebook
 
@@ -166,12 +228,20 @@ All items of section D of `review-2026-11/reports/A-paper-referee.md`.
 
 - Abstract: "with high probability" for updates on long strings; worst-case
   query bounds versus linear probing; root splits.
-- Section 1, model: whether multiplications are needed (authors' note).
-- Section 1, previous work: Pătraşcu–Thorup (2014) is not in the
-  bibliography and the "first" claims predate it (authors' note kept, and a
-  precise one added).
-- Section 4.3: constant-time prefix signatures are incompatible with full
-  randomness; a hash family must be named and the bound redone.
+- Section 1, model: whether multiplications are needed (authors' note; the
+  theory survey argues that a constant-time dictionary needs a non-AC0
+  operation in any case: see `related-work/theory.md`, section 3).
+- Related work (`sec:related`): statements taken from secondary sources should
+  be checked on the papers listed in `related-work/TO-DOWNLOAD.md` (in
+  particular cache-oblivious string B-trees, Delta-fast tries, and the dynamic
+  bound of Fischer and Gawrychowski).
+- Section 4.3: the new analysis of signatures with polynomial hashing must be
+  checked by all authors; the implementations use other hash functions.
+- Experiments: the surveys point out that a B-tree storing pointers to the
+  strings is a weak baseline for strings (current B-trees truncate prefixes
+  and keep key heads in the nodes), and that Wormhole is the structure to
+  compare with; the text of the Experiments section has not been changed in
+  this respect.
 - Section 8.1: citation for the `lg lg w` cost of `λ`.
 - Section 8.3: when an update splits or removes the root, the handle to be
   hashed can be as long as the extent of the root.

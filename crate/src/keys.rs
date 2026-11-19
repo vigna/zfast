@@ -26,7 +26,7 @@ use sux::traits::{IndexedSeq, Types};
 /// themselves are the default positions.
 ///
 /// [`StaticZFastTrie`]: crate::StaticZFastTrie
-/// [rear-coded lists]: sux::dict::RearCodedList
+/// [rear-coded lists]: sux::dict::rear_coded_list::RearCodedList
 /// [`SliceSeq`]: sux::dict::SliceSeq
 pub trait KeySeq {
     /// The type of a key, which may borrow from the sequence or own its
