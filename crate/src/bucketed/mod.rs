@@ -274,6 +274,34 @@ impl Bucket {
         self.len -= 1;
     }
 
+    /// Moves the keys from position `from` on to another bucket, which must
+    /// be empty.
+    ///
+    /// The common prefix of this bucket is a common prefix of both halves,
+    /// so heads are just moved, without accessing the keys, unless the heads
+    /// of a half are all equal, in which case they would be useless.
+    fn split_to(&mut self, from: usize, other: &mut Bucket) {
+        let n = self.len();
+        let count = n - from;
+        debug_assert!(other.len() == 0 && from > 0 && count > 0);
+        for i in 0..count {
+            other.keys[i] = self.keys[from + i].take();
+            other.tags[i] = self.tags[from + i];
+            other.heads[i] = self.heads[from + i];
+        }
+        self.heads[from..].fill(0);
+        self.len = from as u16;
+        other.len = count as u16;
+        other.prefix_len = self.prefix_len;
+        other.prefix_hash = self.prefix_hash;
+        for half in [self, other] {
+            let n = half.len();
+            if n > 1 && half.heads[0] == half.heads[n - 1] {
+                half.rebuild();
+            }
+        }
+    }
+
     /// Moves the keys from position `from` on to the end of another bucket.
     fn move_to(&mut self, from: usize, other: &mut Bucket) {
         let (n, m) = (self.len(), other.len());
@@ -625,7 +653,7 @@ impl<H: HashPrefixes> ZFastSet<H> {
         let anchor = &first[..lcp(last, first) + 1];
         let inserted = self.trie.insert_with(anchor, new);
         debug_assert!(inserted);
-        bucket.move_to(at, new_bucket);
+        bucket.split_to(at, new_bucket);
         let next = bucket.next;
         new_bucket.prev = b;
         new_bucket.next = next;
