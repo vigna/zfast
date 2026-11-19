@@ -667,8 +667,7 @@ class ZFastTrie:
                 target = child_on(node, side)
                 while not target.intercepts(k):
                     target = child_on(target, side)
-                assert J(node, side) is target, (node, side, J(node, side),
-                                                 target)
+                assert J(node, side) is target, (node, side, target)
 
         # The list of leaves (the trie visit lists leaves in order).
         assert [n.extent for n in leaves] == keys
@@ -768,7 +767,8 @@ def clustered(rng, max_length, keys):
     p = rng.randrange(len(x))
     x = x[:p] + ('1' if x[p] == '0' else '0')
     if rng.random() < 0.5:
-        return x + random_string(rng, rng.randint(0, max(0, max_length - len(x))))
+        tail_length = rng.randint(0, max(0, max_length - len(x)))
+        return x + random_string(rng, tail_length)
     return x + rng.choice(sorted(keys))[p + 1:]
 
 
