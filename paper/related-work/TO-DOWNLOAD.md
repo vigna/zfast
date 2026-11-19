@@ -7,6 +7,14 @@ was read instead. The papers are grouped by how much the text of
 
 ## 1. The new text relies on these through secondary sources, or they settle an open issue
 
+**Done (2026-11-20):** all the papers of this section have been read (the PDFs
+are in `../../related/`, not under version control) and the text has been
+corrected accordingly: see `verified-strings.md`, `verified-theory.md` and
+`verified-hashing.md`. Two were read in their conference versions (Pagh, Pagh,
+Ruzic at STOC 2007; Patrascu and Thorup at STOC 2011); the paper of Brodnik,
+Miltersen and Munro (WADS 1997), now cited for the cost of computing the most
+significant bit without multiplication, is known only through Thorup's paper.
+
 | Paper | Venue, DOI | What is needed |
 |---|---|---|
 | Bender, Farach-Colton, Kuszmaul, *Cache-oblivious string B-trees* | PODS 2006, 233-242, 10.1145/1142351.1142385 | Exact theorems (search, update, range bounds; w.h.p., amortized or expected; tall cache). The Related work section says only that it is dynamic and has bounds "of the same form" as string B-trees, from the authors' abstract. |

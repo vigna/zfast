@@ -189,13 +189,15 @@ simple, uniform data structures: given a set $S$ of $n$ variable-length prefix-f
 defined by a standard compacted trie on $S$ endowed with a dictionary of
 size $n-1$. With this simple setup, the z-fast trie can enumerate keys
 in sorted order and can perform the lookup of $x$
-in time $O(\lg|x|)$, while updates are performed within the
-same bounds in expectation (or with high probability using an appropriate
-dictionary). We also show a simple modification that makes it
+using $O(\lg|x|)$ accesses to the dictionary; updates are performed within the
+same bounds. Thus, lookups and updates require time $O(\lg|x|)$ in expectation using
+linear probing, and with high probability using a dictionary
+with constant-time operations with high probability. We also show a simple modification that makes it
 possible to handle strings of length at most $2^w$; in this case, lookups
-and updates are supported in $O(|x|/w + \lg|x|)$ time
+are supported in $O(|x|/w + \lg|x|)$ time
 (and $O(|x|/B + \lg|x|)$ I/Os in the cache-oblivious
-model) with high probability. Finally, just adding two suitable pointers
+model) with high probability, given a dictionary with worst-case lookups, and updates
+within the same bounds in expectation. Finally, just adding two suitable pointers
 per node, the z-fast trie can answer
 predecessor/successor queries in time
 $O(\lg\max\{\?|x|,|x^+|,|x^-|\?\})$ ($x^\pm$ is the
@@ -205,26 +207,17 @@ $O(\lg\max\{\?|x|,|y|,|x^-|,|y^+|\?\}+k)$, where $k$ is the number of elements
 in the output and  $x$ (and $y$) represent the input of the
 prefix (range) queries. In the case of strings
 of length at most $2^w$, predecessor/successor queries
-and updates are supported in $O(|x|/w + \lg\max\{\?|x|,|x^+|,|x^-|\?\})$ time
+are supported in $O(|x|/w + \lg\max\{\?|x|,|x^+|,|x^-|\?\})$ time
 (and $O(|x|/B + \lg\max\{\?|x|,|x^+|,|x^-|\?\})$ I/Os in the cache-oblivious
-model) with high probability.
+model) with high probability, and updates within the same bounds in expectation.
 %  The space occupied
 % by a z-fast trie, besides that necessary to store $S$, is just of $12n$
 % pointers, $2n$ integers and, in the ``long string'' case, $3n$ signatures of
 % $O(w)$ bits each.
-\todo[inline]{Bounds still to be settled by the authors (the statements of
-Theorems~\ref{th:bounds} and~\ref{th:boundslong} have been made consistent with
-what the body proves; the abstract has not been touched). (1)~The abstract
-claims ``with high probability'' for updates on long strings, but updates
-also modify the dictionary, so Theorem~\ref{th:boundslong} can only claim
-expectation unless a dictionary with high-probability updates is assumed, as
-the abstract does in the short-string case. (2)~Query bounds are worst case
-(short strings) only with a dictionary with worst-case lookups, such as
-Cuckoo hashing; with linear probing, which is what the implementation uses,
-they hold in expectation. (3)~When an update splits or removes the root,
+\todo[inline]{Still to be settled by the authors: when an update splits or removes the root,
 the signature of a handle of length up to $|e_{\mathrm{root}}|$, which is
 not bounded by $O(|x|)$, has to be computed (see
-Section~\ref{sec:reusinghash}).}
+Section~\ref{sec:reusinghash}); the abstract and Theorem~\ref{th:boundslong} do not account for this case.}
 
 \end{abstract}
 
@@ -317,11 +310,16 @@ Standard prefix (range, respectively) queries report the set of strings
 (expressed as pointers) with prefix $x$ in $S$ (the set of strings in the
 interval $[x\..y)$, respectively).
 
-We work in the standard RAM model with a word of length $w$, allowing
-multiplications\todo{Seba: Do we really need multiplications? Apparently they were useful only to get constant-time MSB computation.}. 
+We work in the standard RAM model with a word of length $w$, whose instructions include addition, subtraction,
+bitwise Boolean operations, shifts and multiplication. Multiplication is used only to compute hash functions, both for the
+dictionary and for signatures: computing the most significant bit of a word, which requires constant time with
+multiplication~\cite{FrWSITBFT}, can be avoided (see Section~\ref{sec:improvements}). On the other hand, multiplication cannot
+be dispensed with in general, as on a RAM whose instructions are all in $\mathrm{AC}^0$ a dictionary using linear
+space cannot answer queries in constant time~\cite{Andersson1996Static}, even if the instruction set contains the computation of the
+most significant bit~\cite{Thorup2003AC0}; it can be replaced by a table using $o(n)$ words when $w=O(\lg n)$~\cite{Thorup2003AC0}.
 Hash functions are used only to implement a dictionary and, in the ``long
-string'' case, to compute signatures: for the former we make the assumptions required by the dictionary of choice, 
-and for the latter we use polynomial hashing (see Section~\ref{sec:dict}). 
+string'' case, to compute signatures by polynomial hashing (see Section~\ref{sec:dict}); the assumptions on the dictionary 
+are discussed after the statements of the theorems. 
 In particular, the answers to queries are always correct: only running times are subject to probabilistic bounds. 
 We also discuss results in the \emph{cache-oblivious} model~\cite{FLPCOA}, which
 analyses RAM algorithms in the I/O model using an ideal cache replacement
@@ -333,7 +331,7 @@ We prove the following statements:
 If the string length is bounded by $O(w)$, the z-fast trie answers
 predecessor and successor queries in time $O(\lg\max\{\?|x|,|x^+|,|x^-|\?\})$,
 membership and existential prefix queries in time $O(\lg|x|)$ and existential range queries in
-time $O(\lg\max\{\?|x|,|y|\?\})$. The expected time required for  insertions and deletions is 
+time $O(\lg\max\{\?|x|,|y|\?\})$. The expected amortized time required for insertions and deletions is 
 $O(\lg\max\{\?|x|,|x^+|,|x^-|\?\})$. Besides the space 
 required to store $S$, the z-fast trie needs at most $12n$ pointers and $2n$ integers.
 \end{theorem}
@@ -352,7 +350,7 @@ Existential range queries are answered, always w.h.p., in time
 $O(\max\{\?|x|,|y|\?\}/w + \lg\max\{\?|x|,|y|\?\})$ and
 $O(\max\{\?|x|,|y|\?\}/B + \lg\max\{\?|x|,|y|\?\})$ I/Os. Insertions and deletions are
 performed in time $O(|x|/w+\lg\max\{\?|x|,|x^+|,|x^-|\?\})$ and
-$O(|x|/B+\lg\max\{\?|x|,|x^+|,|x^-|\?\})$ I/Os, in expectation, provided that the update does not split or remove the root
+$O(|x|/B+\lg\max\{\?|x|,|x^+|,|x^-|\?\})$ I/Os, in expectation (amortized), provided that the update does not split or remove the root
 (see Section~\ref{sec:reusinghash}). 
 Besides the space required to store
 $S$, the signed z-fast trie needs at most $12n$ pointers, $2n$ integers, and $3n$
@@ -368,17 +366,29 @@ the successor of $x$ in $S\setminus\{\?x\?\}$.
 We can also answer prefix and range queries: if the answer is a set of $k$ 
 strings, then the I/O and time costs are the same as in the existential
 case, plus $O(k)$ and $O(\lg\max\{\?|x^-|,|y^+|\?\} + k)$ for prefix and
-range queries respectively. Note that the space bounds assume a dictionary 
-using at most $3n$ buckets (e.g., a linear-probing hash table with load factor at most $2/3$ and 
-backing arrays whose length is a power of two, or a variant of Cuckoo
-hashing~\cite{PaRCH}). The query bounds of Theorem~\ref{th:bounds} are worst-case bounds 
-only if the dictionary provides worst-case constant-time lookups, as Cuckoo hashing does;
-with linear probing they hold in expectation. 
-We remark that the only reason of having expectations in
-the update bounds is the presence of a dictionary: improvements in
-dynamic dictionaries reflect immediately in improvements to the z-fast trie
-time and space bounds. For example, there are dictionaries using linear space in which all operations take constant time 
-with high probability~\cite{Arbitman2010Backyard}.
+range queries respectively. 
+
+\smallskip\noindent\textbf{The dictionary.} The z-map is a dynamic dictionary with fewer than $n$ keys, each taking a constant number
+of words and having an associated pointer. Our algorithms access it $O(\lg|x|)$ times to locate the exit node of $x$, and each of our time bounds
+is the number of such accesses, plus the time spent outside the dictionary: thus, the bounds hold in the same sense in which the dictionary provides
+constant-time operations. We always assume that the random choices of the dictionary are independent of the keys, of the queries, and
+of the function computing the signatures. In particular:
+\begin{itemize}
+  \item With \emph{linear probing} and a hash function chosen from a $5$-independent family, each operation on a table with load factor
+  bounded away from one takes constant expected time~\cite{Pagh2009Linear}, so all our bounds hold in expectation (amortized,
+  for updates, because of resizing); the same is true of simple tabulation hashing~\cite{Patrascu2012Power}. Note that pairwise
+  independence is not sufficient~\cite{Pagh2009Linear}.
+  \item With a dictionary providing lookups in constant worst-case time and updates in constant expected amortized time, such as
+  dynamic perfect hashing~\cite{DKMDPHULB} or Cuckoo hashing~\cite{PaRCH}, the query bounds of Theorem~\ref{th:bounds} are worst-case bounds,
+  the query bounds of Theorem~\ref{th:boundslong} hold with high probability, and the update bounds hold in expectation (amortized).
+  \item If an upper bound $N$ on $n$ is known in advance, there are dictionaries using $O(N)$ words in which, for every
+  sequence of $N^{O(1)}$ operations, with probability $1-1/N^{O(1)}$ every operation takes constant time in the worst
+  case~\cite{Arbitman2010Backyard} (the result is stated for keys of one word): with such a dictionary all bounds of 
+  Theorems~\ref{th:bounds} and~\ref{th:boundslong}, including those for updates, hold with high probability.
+\end{itemize}
+The space bounds of Theorems~\ref{th:bounds} and~\ref{th:boundslong} assume a dictionary using at most $3n$ buckets
+(e.g., a linear-probing hash table with load factor at most $2/3$ and
+backing arrays whose length is a power of two, or Cuckoo hashing with two tables of $3n/2$ buckets).
 
 To our knowledge, the z-fast trie is the first dynamic digital data structure for
 variable-length strings whose bounds in the RAM model and in the cache-oblivious model 
@@ -823,7 +833,7 @@ trie $T(S)$~\cite{KnuACP} built for a prefix-free set of strings
 $S\subseteq 2^*$. 
 For any given node $\alpha$ of the
 trie, we give the following definitions (see Figure~\ref{fig:ztrie}):
-\begin{figure}[h!]
+\begin{figure}[ht!]
 \centering
 \includegraphics[scale=.9]{fig/prefix-1.mps}\qquad\raisebox{2cm}{\small
 $Z$~\begin{tabular}{c}
@@ -1398,37 +1408,47 @@ The only important property we must preserve, which is necessary for Theorem~\re
 the correct answer on the signature of an existing handle. For the moment, let us assume that
 there are no duplicate signatures (i.e., that all handles have distinct signatures).
 
-Signatures are computed by polynomial hashing~\cite{Dietzfelbinger1992Polynomial}, as in~\cite{Belazzougui2010Fast}. Let $L\leq 2^w$ be a bound on the length of the 
-strings, $p>2^w$ a prime, and $a$ an element of $\mathbf Z_p$ chosen uniformly at random (independently of the strings in $S$ and of the queries). We see a string $x$ 
-as a sequence of words $x_0$, $x_1$, $\dots\,$,~$x_{d-1}$ of $w$ bits, where $d=\lceil |x|/w\rceil$ and the last word is padded with zeroes, and we define its signature as 
-$H_d$, where $H_0=0$ and $H_{i+1}=(aH_i+x_i)\bmod p$. Signatures of handles are computed at construction/insertion time,
-whereas signatures for prefixes of the query string $x$ can be computed incrementally: after a
-preprocessing using time $O(|x|/w)$ and $O(|x|/B)$ I/Os, in which we compute and store the values $H_i$, computing a signature
-for an arbitrary prefix of $x$ takes constant time, as one has just to apply the recurrence to $H_{\lfloor f/w\rfloor}$ and to the 
-last $f\bmod w$ bits of a prefix of length $f$. 
-The signatures of two distinct strings \emph{of the same length} $l$ are the values in $a$ of two distinct polynomials of degree smaller than $\lceil l/w\rceil$ with 
-coefficients in $\mathbf Z_p$, so they are the same with probability at most $\lceil l/w\rceil/p\leq 2L/(wp)$ (we assume without loss of generality $L\geq w$). Strings of different length
-are instead told apart by their length: recall that an entry of the z-map is returned only if the length of its handle is the length of the prefix we are looking for.
+Signatures are computed by evaluating at a random point a polynomial whose coefficients are the words of the
+string: this is the class of hash functions of~\cite[Section~5]{Dietzfelbinger1992Polynomial}, which we used
+also in~\cite{Belazzougui2010Fast}. Let $L$, with $w\leq L\leq 2^w$, be a bound on the length of the strings (keys and queries),
+$p>2^w$ a prime, and $a$ an element of $\mathbf Z_p$ chosen uniformly at random, independently of the strings in $S$ and of the queries. We see a string $x$
+as a sequence of words $x_0$, $x_1$, $\dots\,$,~$x_{d-1}$ of $w$ bits, where $d=\lceil |x|/w\rceil$ and the last word is padded with zeroes,
+we let $H_0=0$ and $H_{i+1}=(aH_i+x_i)\bmod p$, and we define the signature of $x$ as
+\[
+	(aH_d+|x|)\bmod p=\biggl(\,\sum_{i=0}^{d-1}x_ia^{d-i}+|x|\biggr)\bmod p.
+\]
+The length must be part of the signature, because $H_d$ alone does not tell apart strings that differ by zeroes at the end of the last word, or by
+leading words equal to zero: for instance, $H_d=0$ for every string of zeroes, whatever $a$.
 
-Assuming $p\geq 2Ln^c$, so that signatures have length $c\lg n + \lg L+O(1)$, 
-it is easy to see that the probability of completing a query (which performs at most
-$w+2$ probes on input $x$, because $\lg |x| \leq \lg 2^w=w$)
-without getting a false positive is at least $1-3/n^{c-1}$: 
-indeed,  the probability that a given prefix induces a false positive 
-is at most $2nL/(wp)\leq 1/(wn^{c-1})$ (by a union bound on the signatures of the at most $n$ handles), so the 
-probability of hitting a false positive in any of the at most $w+2\leq 3w$ probes of a query
-is at most $3/n^{c-1}$. Note that the prefixes probed by a query depend on the answers of the z-map, and thus on $a$, only after 
-the first false positive: until then, the execution is the same as that of Algorithm~\ref{algo:exitorparex} with an exact z-map, 
-so it suffices to bound the probability of a false positive on the probes of the latter, which do not depend on $a$.
-\todo[inline]{This analysis replaces the one based on fully random signatures of $c\lg n+\lg w$ bits, which was not compatible 
-with the constant-time computation of the signatures of prefixes; it should be checked by all authors. Note that the implementations 
-use different hash functions, for which no such bound is available.}
+Two distinct strings $x$ and $y$ of length at most $L$ have the same signature with probability at most $\lceil L/w\rceil/p\leq 2L/(wp)$. Indeed,
+the two signatures are the values in $a$ of two polynomials of degree at most $\lceil L/w\rceil$ with coefficients in $\mathbf Z_p$, and
+the two polynomials are distinct: if $|x|\neq|y|$ their constant terms are different, as lengths are at most $2^w<p$; if $|x|=|y|$ the
+two strings differ in some word, and words are smaller than $2^w<p$. A nonzero polynomial of degree $D$ over a field has at most $D$ roots.
+
+Signatures of handles are computed at construction/insertion time,
+whereas signatures for prefixes of the query string $x$ can be computed incrementally: after a
+preprocessing using time $O(|x|/w)$ and $O(|x|/B)$ I/Os, in which we compute and store the values $H_i$, the signature of the
+prefix of length $f$ is obtained by applying the recurrence to $H_{\lfloor f/w\rfloor}$ and to the last $f\bmod w$ bits of the prefix
+(if $w$ does not divide $f$), and then once more to the result and to $f$. This requires a constant number of additions and multiplications
+modulo $p$, that is, constant time, as long as $p$ fits a constant number of words.
+
+Assume now $p\geq 2Ln^c$ for some $c>1$: since we need also $p>2^w$, signatures have $\max\{\?w, c\lg n + \lg L\?\}+O(1)$ bits.
+Consider the execution of Algorithm~\ref{algo:exitorparex} on input $x$ with an exact z-map: it probes at most
+$\lfloor\lg|x|\rfloor+2\leq w+2\leq 3w$ prefixes of $x$, and these prefixes depend only on $x$ and $S$, and thus not on $a$.
+We say that one of these prefixes is \emph{bad} if its signature is the signature of a handle different from the prefix itself.
+By a union bound on the fewer than $n$ handles, a given prefix is bad with probability at most $2nL/(wp)\leq 1/(wn^{c-1})$, so
+with probability at least $1-3/n^{c-1}$ no probed prefix is bad. In that case, the execution of the algorithm with signatures
+is identical to the execution with an exact z-map: by induction on the probes, a prefix that is a handle is found, as no other handle
+has its signature, and a prefix that is not a handle is not, as no handle has its signature. In particular, there are no false positives.
+\todo[inline]{The implementations use different hash functions, for which no such bound is available.}
 
 Thus,
-Algorithm~\ref{algo:exitorparex} will end with the correct output in time $O(|x|/w +\lg|x|)$ with
-high probability, because of Theorem~\ref{th:errors}. Note that since $n$ and $L$ are not known in advance, the signatures
-must actually be $(c+1)w+O(1)=O(w)$ bits long (we assume, as usual, that the set
-size is at most $2^w$, so $c\lg n\leq cw$, and $\lg L\leq w$).
+Algorithm~\ref{algo:exitorparex} will perform at most $w+2$ accesses to the z-map and end with the correct output with
+high probability; if accesses to the z-map take constant time, the time required is $O(|x|/w +\lg|x|)$.
+Note that since $n$ and $L$ are not known in advance, we must actually choose $p\geq 2^{(c+1)w+1}$, so signatures
+are $(c+1)w+O(1)=O(w)$ bits long (we assume, as usual, that the set
+size is at most $2^w$, so $c\lg n\leq cw$, and $\lg L\leq w$); in this case no probed prefix is bad with probability
+at least $1-3n/2^{cw}\geq 1-3/2^{(c-1)w}$.
 
 At the end of the algorithm, we just need to check if $h_\beta\preceq x$, where $\beta$ is the node
 on the top of the stack,
@@ -1450,12 +1470,12 @@ entries with the same signature met along the probe sequence are marked; when th
 mark of the last entry with that signature preceding it in the probe sequence, if any, is cleared.
 
 This means that if during the execution of Algorithm~\ref{algo:exitorparex} we try to query the map with an
-existing but duplicate signature, an explicit comparison, requiring time $O(|x|/w)$, will be needed. With the same analysis as above, 
-we obtain that the probability of hitting a duplicate signature during the execution of the
-algorithm is at most $3/n^{c-1}$.
+existing but duplicate signature, an explicit comparison, requiring time $O(|x|/w)$, will be needed. A query meets
+a duplicate signature only if it probes a bad prefix, as two distinct handles have the signature of the prefix, and
+one of them is not the prefix.
 
 \smallskip
-Summarizing the two cases above, with probability at least $1-6/n^{c-1}$ a query will neither perform explicit comparisons
+Summarizing, with probability at least $1-3/n^{c-1}$ a query will neither perform explicit comparisons
 during the search nor need to re-run the algorithm on actual handles,
 because neither false positives nor duplicate signatures will be met. 
 
@@ -1548,8 +1568,8 @@ We now proceed to describe how the various types of queries discussed in
 Theorem~\ref{th:bounds} and~\ref{th:boundslong} are handled by the z-fast trie,
 and prove the associated time bounds. In this presentation we shall refer to the
 case of long strings and signature-based tries (the case of short strings is similar, and simpler);
-all time bounds hold only with high probability (whereas the corresponding bounds for short strings are worst-case bounds,
-provided that the dictionary has worst-case lookups).
+all time bounds hold with high probability if the dictionary has worst-case lookups, and in expectation otherwise
+(the corresponding bounds for short strings are worst-case bounds in the first case).
 All algorithms will need to locate one (or two) exit nodes, and they will do so using Algorithm~\ref{algo:exitorparex}
 followed by a check of correctness (Theorem~\ref{th:errors}): if the correctness check fails (which happens
 with negligible probability), the algorithm resorts to exact search; otherwise, it will proceed
@@ -2020,9 +2040,13 @@ ends at $x^+$, so it requires time $O(\lg |x^+|)$ (in the symmetric case, $O(\lg
 \subsection{Avoiding the computation of the 2-fattest number}
 
 Algorithm~\ref{algo:parex} requires the computation of a 2-fattest number, and thus of $\lambda$ (the index of the highest bit set), at each
-iteration. However, unless multiplication is allowed in the model, the cost of computing $\lambda$ is $\lg \lg w$\todo{Citation needed for the $\lg\lg w$ bound.}.
+iteration. With multiplication, $\lambda$ can be computed in constant time~\cite{FrWSITBFT}; however, on a RAM providing just additions,
+shifts and bitwise Boolean operations its computation requires time $\Omega(\lg \lg w)$, unless the space used is exponential in
+$w^{1-\epsilon}$~\cite{Brodnik1997Transdichotomous}\todo{This citation is taken from~\cite{Thorup2003AC0}; the paper has not been checked.}.
 In this section we show how to compute the 2-fattest numbers required by Algorithm~\ref{algo:parex} using
-a single computation of $\lambda$ at the start of the algorithm. 
+a single computation of $\lambda$ at the start of the algorithm, or even none: it is sufficient to start from an upper bound
+$s$ on $\lambda(b)+1$ such as the first power of two for which $b\gg s=0$, which can be found by doubling in $O(\lg\lg b)$ steps
+and adds at most $\lambda(b)+2$ iterations to the loop of Table~\ref{tab:compalgos}. 
 
 Suppose that $i$ is initialized
 so that $i+1$ is the length of $\bar a$ (and $\bar b$), or larger.\footnote{One way to initialize

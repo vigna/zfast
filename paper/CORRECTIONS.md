@@ -152,6 +152,30 @@ a minute; `--quick` for a few seconds).
 - Section 8.3: the new handle of the exit node after a low cut is shorter
   than `2|x|` unless the exit node is the root (proof included).
 
+- **After reading the primary sources** (`related-work/verified-hashing.md`):
+  - Signatures (Section 4.3). The analysis with polynomial hashing written
+    from secondary sources had an error: the signature did not depend on the
+    length, so strings differing by trailing zeroes (or by leading zero words)
+    collided for every choice of the random point, and the bound on duplicate
+    signatures was false (for `S = {0^k 1}` all handles had signature 0). The
+    length is now the constant term of the polynomial; the collision bound
+    holds for any two distinct strings; signatures have
+    `max{w, c lg n + lg L} + O(1)` bits (`p > 2^w` is needed); false positives
+    and duplicates are treated as one event ("bad" prefixes), giving
+    `1 - 3/n^{c-1}`; the citation points to Section 5 of Dietzfelbinger et al.
+  - Dictionary (after the theorems). The assumptions are stated at three
+    levels: linear probing with 5-independence or simple tabulation (bounds in
+    expectation; pairwise independence is not enough); worst-case lookups with
+    expected amortized updates (dynamic perfect hashing, Cuckoo hashing);
+    constant time with high probability (Arbitman, Naor, Segev, with capacity
+    known in advance). The abstract and `th:bounds`/`th:boundslong` say
+    "amortized" for updates and no longer claim "with high probability" for
+    updates on long strings.
+  - Model (Section 1). Multiplication is needed only for hashing; it cannot be
+    avoided for a constant-time dictionary (Andersson et al.; Thorup), except
+    when `w = O(lg n)`. The most significant bit is not needed at all: the
+    loop of Section 8.1 can start from an upper bound found by doubling.
+
 ## 5. Language
 
 All items of section D of `review-2026-11/reports/A-paper-referee.md`.
@@ -235,26 +259,23 @@ state the contribution, with pointers to the section.
 
 ## 8. Open issues (each is a `\todo` in the text)
 
-- Abstract: "with high probability" for updates on long strings; worst-case
-  query bounds versus linear probing; root splits.
-- Section 1, model: whether multiplications are needed (authors' note; the
-  theory survey argues that a constant-time dictionary needs a non-AC0
-  operation in any case: see `related-work/theory.md`, section 3).
-- Related work (`sec:related`): statements taken from secondary sources should
-  be checked on the papers listed in `related-work/TO-DOWNLOAD.md` (in
-  particular cache-oblivious string B-trees, Delta-fast tries, and the dynamic
-  bound of Fischer and Gawrychowski).
-- Section 4.3: the new analysis of signatures with polynomial hashing must be
-  checked by all authors; the implementations use other hash functions.
+- Abstract and `th:boundslong`: when an update splits or removes the root, the
+  handle to be hashed can be as long as the extent of the root (Section 8.3).
+- Section 4.3: the implementations use hash functions for which the bound on
+  signatures is not available.
+- Related work (`sec:related`): the statements about the papers of section 1
+  of `related-work/TO-DOWNLOAD.md` have been checked on the papers
+  (`related-work/verified-*.md`); those about the papers of sections 2 and 3
+  still come from secondary sources.
 - Experiments: the surveys point out that a B-tree storing pointers to the
   strings is a weak baseline for strings (current B-trees truncate prefixes
-  and keep key heads in the nodes), and that Wormhole is the structure to
-  compare with; the text of the Experiments section has not been changed in
-  this respect.
-- Section 8.1: citation for the `lg lg w` cost of `λ`.
-- Section 8.3: when an update splits or removes the root, the handle to be
-  hashed can be as long as the extent of the root.
-- Section 10: two `LINK`s; rerun the experiments (hardware, compiler, space,
-  several runs, wall-clock time, uniform shuffle); placeholder for the Rust
-  implementation.
+  and keep key heads in the nodes); the new Section `sec:rust` compares with
+  Wormhole, but the old text has not been changed in this respect.
+- Section 8.1: the citation for the `lg lg w` lower bound on `λ` without
+  multiplication (Brodnik, Miltersen, Munro) is taken from Thorup's paper and
+  has not been checked.
+- Section 10: two `LINK`s (three with the Rust code); rerun the experiments of
+  the C implementation (hardware, compiler, space, several runs, wall-clock
+  time, uniform shuffle); the section on the Rust implementation is
+  preliminary.
 - Section 11: conclusions are missing.
