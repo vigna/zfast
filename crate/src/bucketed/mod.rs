@@ -831,3 +831,35 @@ impl<H: HashPrefixes> DoubleEndedIterator for Iter<'_, H> {
 impl<H: HashPrefixes> ExactSizeIterator for Iter<'_, H> {}
 
 impl<H: HashPrefixes> std::iter::FusedIterator for Iter<'_, H> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A small test exercising splits and merges, meant to be run also
+    /// under Miri.
+    #[test]
+    fn test_split_merge() {
+        let mut set = <ZFastSet>::new();
+        let keys: Vec<Vec<u8>> = (0..200_u32)
+            .map(|i| format!("key/{:03}/{}", (i * 37) % 200, i % 7).into_bytes())
+            .collect();
+        for key in &keys {
+            assert!(set.insert(key));
+        }
+        assert!(set.num_buckets() > 1);
+        set.check();
+        assert_eq!(set.len(), keys.len());
+        for key in &keys {
+            assert!(set.contains(key));
+            assert_eq!(set.succ(key), Some(key.as_slice()));
+        }
+        assert_eq!(set.iter().count(), keys.len());
+        for key in &keys {
+            assert!(set.remove(key));
+        }
+        set.check();
+        assert!(set.is_empty());
+        assert_eq!(set.num_buckets(), 1);
+    }
+}

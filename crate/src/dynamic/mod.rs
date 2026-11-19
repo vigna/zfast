@@ -1594,3 +1594,32 @@ impl<H: HashPrefixes, V: Copy> DoubleEndedIterator for Iter<'_, H, V> {
 impl<H: HashPrefixes, V: Copy> ExactSizeIterator for Iter<'_, H, V> {}
 
 impl<H: HashPrefixes, V: Copy> std::iter::FusedIterator for Iter<'_, H, V> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A small test exercising all kinds of updates, meant to be run also
+    /// under Miri.
+    #[test]
+    fn test_updates() {
+        let mut trie = <ZFastTrie>::new();
+        let keys: Vec<Vec<u8>> = (0..60_u32)
+            .map(|i| format!("{:b}/{}", (i * 37) % 60, i % 5).into_bytes())
+            .collect();
+        for key in &keys {
+            assert!(trie.insert(key));
+        }
+        trie.check();
+        for key in &keys {
+            assert!(trie.contains(key));
+            assert_eq!(trie.pred(key), Some(key.as_slice()));
+        }
+        assert_eq!(trie.iter().count(), keys.len());
+        for key in &keys {
+            assert!(trie.remove(key));
+        }
+        trie.check();
+        assert!(trie.is_empty());
+    }
+}

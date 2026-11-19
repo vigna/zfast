@@ -59,14 +59,14 @@ pub const fn jump(h: usize) -> usize {
 /// Prefetches the cache line containing the given address.
 #[inline(always)]
 pub(crate) fn prefetch<T>(ptr: *const T) {
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", not(miri)))]
     // SAFETY: prefetching has no architectural effect, even on invalid
     // addresses
     unsafe {
         use core::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
         _mm_prefetch::<_MM_HINT_T0>(ptr as *const i8);
     }
-    #[cfg(target_arch = "aarch64")]
+    #[cfg(all(target_arch = "aarch64", not(miri)))]
     // SAFETY: as above
     unsafe {
         core::arch::asm!(
@@ -75,7 +75,8 @@ pub(crate) fn prefetch<T>(ptr: *const T) {
             options(nostack, preserves_flags, readonly)
         );
     }
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    // Miri does not support inline assembly
+    #[cfg(any(miri, not(any(target_arch = "x86_64", target_arch = "aarch64"))))]
     let _ = ptr;
 }
 
