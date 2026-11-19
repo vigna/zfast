@@ -1,4 +1,4 @@
-/target
+target
 Cargo.lock
 # LaTeX build products
 paper/*.aux
@@ -11,5 +11,9 @@ paper/*.synctex.gz
 paper/*.out
 paper/*.tdo
 paper/dynzfast.pdf
+# Comparative benchmarks
+bench/data
+bench/results
+bench/build
 .DS_Store
 __pycache__
