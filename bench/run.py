@@ -19,6 +19,11 @@ of each method, the space, and checks that all methods computed the same
 checksums. `table` writes a LaTeX tabular (operations in rows, methods in
 columns) for the paper. Both read results from bench/results, or from the
 directory given by --results (e.g., the results stored with the paper).
+
+On very large sets, use --queries to bound the number of queries (and of
+deletions): `bench --dataset D --n 1000000000 --queries 10000000` inserts half
+a billion keys and runs ten million queries of each kind; the results are
+then reported with `report --dataset D.q10000000`.
 """
 
 import argparse
@@ -61,12 +66,19 @@ def spec(dataset):
     return path
 
 
+def tagged(dataset, queries):
+    """Returns the name under which workloads and results are stored: the
+    name of the dataset, followed by the maximum number of queries, if any."""
+    return f"{dataset}.q{queries}" if queries else dataset
+
+
 def workload(dataset, n, args):
     """Generates the workload files, if necessary, and returns their prefix."""
     os.makedirs(DATA, exist_ok=True)
-    prefix = os.path.join(DATA, f"{dataset}-{n}")
+    prefix = os.path.join(DATA, f"{tagged(dataset, args.queries)}-{n}")
     if args.force_gen or not all(os.path.exists(f"{prefix}.{e}") for e in ("keys", "hits", "misses")):
-        run([os.path.join(BUILD, "zfast-bench"), "gen", spec(dataset), str(n), prefix], args.dry_run)
+        run([os.path.join(BUILD, "zfast-bench"), "gen", spec(dataset), str(n), prefix]
+            + ([str(args.queries)] if args.queries else []), args.dry_run)
     return prefix
 
 
@@ -86,7 +98,7 @@ def cmd_bench(args):
         for n in [int(x) for x in args.n.split(",")]:
             prefix = workload(dataset, n, args)
             for name in names:
-                out = result_file(name, dataset, n)
+                out = result_file(name, tagged(dataset, args.queries), n)
                 if os.path.exists(out) and not args.force:
                     print(f"{out} exists, skipping", file=sys.stderr)
                     continue
@@ -215,6 +227,9 @@ def main():
         if name == "bench":
             p.add_argument("--n", default=",".join(map(str, SIZES)), help="comma-separated numbers of keys")
             p.add_argument("--reps", type=int, default=REPS, help="repetitions of the query phases")
+            p.add_argument("--queries", type=int, default=0,
+                           help="maximum number of successful and of unsuccessful queries (default: one per key); "
+                                "workloads and results are then stored under the name DATASET.qQUERIES")
             p.add_argument("--pin", default="", help='a command prefix pinning the CPU, e.g. "taskset -c 8"')
             p.add_argument("--force", action="store_true", help="rerun existing results")
             p.add_argument("--force-gen", action="store_true", help="regenerate existing workloads")

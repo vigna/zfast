@@ -9,7 +9,7 @@
 //! Rust standard library.
 //!
 //! ```text
-//! zfast-bench gen KEYS N PREFIX
+//! zfast-bench gen KEYS N PREFIX [QUERIES]
 //! zfast-bench run METHOD PREFIX REPS
 //! ```
 //!
@@ -19,7 +19,9 @@
 //! key per line, or `urls`, `u64`, `u64x2` (see `crate/benches/common`); the
 //! first file contains N / 2 distinct keys in random order, the second one the
 //! same keys in a different random order, and the third one as many strings
-//! from the same source that are not keys.
+//! from the same source that are not keys. If `QUERIES` is given, the second
+//! and the third file contain at most that many strings (the second one is
+//! then a random sample of the keys): this is necessary on very large sets.
 //!
 //! `run` executes a fixed sequence of phases, printing for each one a line
 //!
@@ -43,7 +45,7 @@ use std::io::Write;
 use std::ops::Bound::{Included, Unbounded};
 use std::time::Instant;
 use zfast::utils::{Chain, HashPrefixes, Xxh3};
-use zfast::{KeySeq, PackedKeys, StaticZFastTrie, ZFastSet, ZFastTrie};
+use zfast::{KeySeq, PackedKeys, StaticZFastTrie, ZFastPagedSet, ZFastSet, ZFastTrie};
 
 /// Writes a sequence of keys as length-prefixed records.
 fn write(keys: &PackedKeys, path: &str) -> std::io::Result<()> {
@@ -179,6 +181,63 @@ fn run_set<H: HashPrefixes>(r: &Runner, keys: &PackedKeys, hits: &PackedKeys, mi
     r.time("remove", 1, hits, |k| set.remove(k) as usize);
 }
 
+fn run_paged<H: HashPrefixes>(
+    r: &Runner,
+    keys: &PackedKeys,
+    hits: &PackedKeys,
+    misses: &PackedKeys,
+) {
+    let before = rss();
+    let mut set = <ZFastPagedSet<H>>::new();
+    r.time("insert", 1, keys, |k| set.insert(k) as usize);
+    r.space(keys.len(), set.mem_size(), rss().saturating_sub(before));
+    eprintln!(
+        "{} pages, {:.1} keys per page, router: {:.1} bytes per page",
+        set.num_pages(),
+        set.len() as f64 / set.num_pages() as f64,
+        set.router_mem_size() as f64 / set.num_pages() as f64
+    );
+    if std::env::var("ZFAST_STATS").is_ok() {
+        // How many candidate pages the router proposes, and which one is
+        // the right one
+        for (name, queries) in [("hits", hits), ("misses", misses)] {
+            let mut counts = [[0_usize; 3]; 3];
+            for q in queries.iter() {
+                let (n, which) = set.locate_stats(q);
+                counts[n][which.map_or(2, |i| i)] += 1;
+            }
+            eprintln!("{name}: candidates x (first, second, none): {counts:?}");
+        }
+    }
+    if std::env::var("ZFAST_STATS").is_ok() {
+        // The cost of the router alone, and of the router followed by the
+        // check of the fences
+        r.time("route-hit", r.reps, hits, |k| set.route(k) as usize);
+        r.time("route-miss", r.reps, misses, |k| set.route(k) as usize);
+        r.time("page-hit", r.reps, hits, |k| set.page_of(k) as usize);
+        r.time("page-miss", r.reps, misses, |k| set.page_of(k) as usize);
+    }
+    r.time("contains-hit", r.reps, hits, |k| set.contains(k) as usize);
+    r.time("contains-miss", r.reps, misses, |k| {
+        set.contains(k) as usize
+    });
+    r.time("succ-hit", r.reps, hits, |k| {
+        set.succ(k).map_or(0, |k| k.len())
+    });
+    r.time("succ-miss", r.reps, misses, |k| {
+        set.succ(k).map_or(0, |k| k.len())
+    });
+    let start = Instant::now();
+    let sum = set.iter().map(|k| k.len()).sum::<usize>();
+    r.result(
+        "iterate",
+        keys.len(),
+        start.elapsed().as_nanos() as f64 / keys.len() as f64,
+        sum,
+    );
+    r.time("remove", 1, hits, |k| set.remove(k) as usize);
+}
+
 fn run_btree(r: &Runner, keys: &PackedKeys, hits: &PackedKeys, misses: &PackedKeys) {
     let before = rss();
     let mut set = BTreeSet::<Box<[u8]>>::new();
@@ -289,10 +348,10 @@ fn run_bsearch(r: &Runner, keys: &PackedKeys, hits: &PackedKeys, misses: &Packed
 }
 
 fn usage() -> ! {
-    eprintln!("Usage: zfast-bench gen KEYS N PREFIX");
+    eprintln!("Usage: zfast-bench gen KEYS N PREFIX [QUERIES]");
     eprintln!("       zfast-bench run METHOD PREFIX REPS");
     eprintln!(
-        "Methods: zset, zft, zft-chain, btree, bsearch, szft:RATIO, szft-ef:RATIO, szft-chain:RATIO"
+        "Methods: zpaged, zset, zft, zft-chain, btree, bsearch, szft:RATIO, szft-ef:RATIO, szft-chain:RATIO"
     );
     std::process::exit(1)
 }
@@ -300,9 +359,13 @@ fn usage() -> ! {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
-        Some("gen") if args.len() == 5 => {
+        Some("gen") if args.len() == 5 || args.len() == 6 => {
             let n: usize = args[3].parse().unwrap_or_else(|_| usage());
-            let w = Workload::new(&args[2], n / 2);
+            let queries: usize = match args.get(5) {
+                Some(q) => q.parse().unwrap_or_else(|_| usage()),
+                None => n / 2,
+            };
+            let w = Workload::with_queries(&args[2], n / 2, queries);
             for (keys, ext) in [(&w.keys, "keys"), (&w.hits, "hits"), (&w.misses, "misses")] {
                 write(keys, &format!("{}.{ext}", args[4])).expect("cannot write workload");
             }
@@ -328,6 +391,8 @@ fn main() {
                 None => (method, 1),
             };
             match name {
+                "zpaged" => run_paged::<Xxh3>(&r, &keys, &hits, &misses),
+                "zpaged-chain" => run_paged::<Chain>(&r, &keys, &hits, &misses),
                 "zset" => run_set::<Xxh3>(&r, &keys, &hits, &misses),
                 "zset-chain" => run_set::<Chain>(&r, &keys, &hits, &misses),
                 "zft" => run_trie::<Xxh3>(&r, &keys, &hits, &misses),

@@ -25,6 +25,10 @@ SPACE lines (see zfast-bench/src/main.rs).
 """
 
 METHODS = {
+    "ZFastPagedSet": {
+        "tool": "rust", "arg": "zpaged", "kind": "dynamic",
+        "label": "z-fast paged set", "tex": "\\texttt{ZFastPagedSet}",
+    },
     "ZFastSet": {
         "tool": "rust", "arg": "zset", "kind": "dynamic",
         "label": "z-fast set (bucketed)", "tex": "\\texttt{ZFastSet}",

@@ -15,6 +15,9 @@ mem_dbg = "0.4.1"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 epserde = { version = "0.13.2", optional = true, default-features = false, features = ["std", "derive"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 anyhow = "1.0"
 rand = { version = "0.10.1", default-features = false, features = ["std", "std_rng"] }

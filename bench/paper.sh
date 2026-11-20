@@ -27,6 +27,9 @@ fi
 # Half of the keys are inserted, and half are used for unsuccessful queries
 N=$(($(wc -l < data/eu-urls-255) / 100000 * 100000))
 
-make init
+# Fetch the competitors in submodules (not needed in a plain copy of the tree)
+if git rev-parse --git-dir > /dev/null 2>&1; then
+	make init
+fi
 python3 run.py bench --method all --dataset eu-urls-255 --n $((N / 10)),$N --pin "taskset -c $CORE"
 python3 run.py report --dataset eu-urls-255

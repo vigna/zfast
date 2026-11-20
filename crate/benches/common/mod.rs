@@ -65,7 +65,10 @@ pub fn synthetic_urls(n: usize, rng: &mut SmallRng) -> Vec<Box<[u8]>> {
 ///
 /// `spec` is the name of a file containing one key per line, or `u64` (random
 /// 8-byte keys), `u64x2` (random 16-byte keys), or `urls` (synthetic URL-like
-/// keys).
+/// keys). The keys of a file are deduplicated and shuffled, unless the
+/// environment variable `ZFAST_PRESHUFFLED` is set: in that case, the file
+/// must contain distinct keys in random order, and its first `n` lines are
+/// returned.
 pub fn load(spec: &str, n: usize, rng: &mut SmallRng) -> Vec<Box<[u8]>> {
     let mut keys: Vec<Box<[u8]>> = match spec {
         "u64" => {
@@ -77,6 +80,17 @@ pub fn load(spec: &str, n: usize, rng: &mut SmallRng) -> Vec<Box<[u8]>> {
             set.into_iter().map(|x| x.to_be_bytes().into()).collect()
         }
         "urls" => return synthetic_urls(n, rng),
+        file if std::env::var("ZFAST_PRESHUFFLED").is_ok() => {
+            // The file contains distinct keys in random order: we just
+            // read the first ones (this is the only practical way of
+            // handling hundreds of millions of keys)
+            let reader = BufReader::new(std::fs::File::open(file).expect("cannot open key file"));
+            return reader
+                .split(b'\n')
+                .take(n)
+                .map(|line| line.expect("read error").into_boxed_slice())
+                .collect();
+        }
         file => {
             let reader = BufReader::new(std::fs::File::open(file).expect("cannot open key file"));
             let set: BTreeSet<Box<[u8]>> = reader
@@ -110,11 +124,24 @@ impl Workload {
     /// Creates a workload with (about) `n` keys; see [`load`] for the
     /// meaning of `spec`.
     pub fn new(spec: &str, n: usize) -> Self {
+        Self::with_queries(spec, n, n)
+    }
+
+    /// Creates a workload with (about) `n` keys and at most `queries`
+    /// successful and unsuccessful queries; see [`load`] for the meaning of
+    /// `spec`.
+    ///
+    /// On very large sets, running a query for each key takes too long: the
+    /// successful queries are then a random sample of the keys.
+    pub fn with_queries(spec: &str, n: usize, queries: usize) -> Self {
         let mut rng = SmallRng::seed_from_u64(0);
-        let all = load(spec, 2 * n, &mut rng);
-        let (keys, misses) = all.split_at(all.len() / 2);
+        let queries = queries.min(n);
+        let all = load(spec, n + queries, &mut rng);
+        // If the source has fewer strings than requested, keep the proportion
+        let (keys, misses) = all.split_at(all.len() * n / (n + queries));
         let mut hits = keys.to_vec();
         hits.shuffle(&mut rng);
+        hits.truncate(misses.len());
         Self {
             keys: keys.iter().collect(),
             hits: hits.iter().collect(),

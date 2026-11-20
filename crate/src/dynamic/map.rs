@@ -49,7 +49,7 @@ const EMPTY_SLOT: Slot = Slot {
 /// resized without accessing the nodes, and deletions use backward shifting
 /// (there are no tombstones).
 #[derive(Debug, Clone)]
-pub(super) struct HandleMap {
+pub(crate) struct HandleMap {
     slots: Box<[Slot]>,
     /// The number of bits to shift a signature to the right to obtain its
     /// home position.

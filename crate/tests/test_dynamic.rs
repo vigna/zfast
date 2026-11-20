@@ -12,25 +12,26 @@ use rand::RngExt;
 use std::collections::BTreeSet;
 use std::ops::Bound::{Excluded, Unbounded};
 use zfast::utils::{Chain, HashPrefixes, Xxh3};
-use zfast::{ZFastSet, ZFastTrie};
+use zfast::{ZFastPagedSet, ZFastSet, ZFastTrie};
 
-/// The operations common to the dynamic structures we test.
+/// The operations common to the dynamic structures we test; keys are
+/// returned as vectors, as not all structures return slices.
 trait Set {
     fn with_sig_bits(sig_bits: u32) -> Self;
     fn insert(&mut self, x: &[u8]) -> bool;
     fn remove(&mut self, x: &[u8]) -> bool;
     fn contains(&self, x: &[u8]) -> bool;
-    fn pred(&self, x: &[u8]) -> Option<&[u8]>;
-    fn pred_strict(&self, x: &[u8]) -> Option<&[u8]>;
-    fn succ(&self, x: &[u8]) -> Option<&[u8]>;
-    fn succ_strict(&self, x: &[u8]) -> Option<&[u8]>;
-    fn first(&self) -> Option<&[u8]>;
-    fn last(&self) -> Option<&[u8]>;
+    fn pred(&self, x: &[u8]) -> Option<Vec<u8>>;
+    fn pred_strict(&self, x: &[u8]) -> Option<Vec<u8>>;
+    fn succ(&self, x: &[u8]) -> Option<Vec<u8>>;
+    fn succ_strict(&self, x: &[u8]) -> Option<Vec<u8>>;
+    fn first(&self) -> Option<Vec<u8>>;
+    fn last(&self) -> Option<Vec<u8>>;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
-    fn keys(&self) -> Vec<&[u8]>;
-    fn keys_rev(&self) -> Vec<&[u8]>;
-    fn keys_from(&self, x: &[u8]) -> Vec<&[u8]>;
+    fn keys(&self) -> Vec<Vec<u8>>;
+    fn keys_rev(&self) -> Vec<Vec<u8>>;
+    fn keys_from(&self, x: &[u8]) -> Vec<Vec<u8>>;
     fn check(&self);
 }
 
@@ -49,23 +50,23 @@ macro_rules! impl_set {
             fn contains(&self, x: &[u8]) -> bool {
                 <$ty<H>>::contains(self, x)
             }
-            fn pred(&self, x: &[u8]) -> Option<&[u8]> {
-                <$ty<H>>::pred(self, x)
+            fn pred(&self, x: &[u8]) -> Option<Vec<u8>> {
+                <$ty<H>>::pred(self, x).map(|k| k.to_vec())
             }
-            fn pred_strict(&self, x: &[u8]) -> Option<&[u8]> {
-                <$ty<H>>::pred_strict(self, x)
+            fn pred_strict(&self, x: &[u8]) -> Option<Vec<u8>> {
+                <$ty<H>>::pred_strict(self, x).map(|k| k.to_vec())
             }
-            fn succ(&self, x: &[u8]) -> Option<&[u8]> {
-                <$ty<H>>::succ(self, x)
+            fn succ(&self, x: &[u8]) -> Option<Vec<u8>> {
+                <$ty<H>>::succ(self, x).map(|k| k.to_vec())
             }
-            fn succ_strict(&self, x: &[u8]) -> Option<&[u8]> {
-                <$ty<H>>::succ_strict(self, x)
+            fn succ_strict(&self, x: &[u8]) -> Option<Vec<u8>> {
+                <$ty<H>>::succ_strict(self, x).map(|k| k.to_vec())
             }
-            fn first(&self) -> Option<&[u8]> {
-                <$ty<H>>::first(self)
+            fn first(&self) -> Option<Vec<u8>> {
+                <$ty<H>>::first(self).map(|k| k.to_vec())
             }
-            fn last(&self) -> Option<&[u8]> {
-                <$ty<H>>::last(self)
+            fn last(&self) -> Option<Vec<u8>> {
+                <$ty<H>>::last(self).map(|k| k.to_vec())
             }
             fn len(&self) -> usize {
                 <$ty<H>>::len(self)
@@ -73,15 +74,15 @@ macro_rules! impl_set {
             fn is_empty(&self) -> bool {
                 <$ty<H>>::is_empty(self)
             }
-            fn keys(&self) -> Vec<&[u8]> {
+            fn keys(&self) -> Vec<Vec<u8>> {
                 assert_eq!(self.iter().len(), <$ty<H>>::len(self));
-                self.iter().collect()
+                self.iter().map(|k| k.to_vec()).collect()
             }
-            fn keys_rev(&self) -> Vec<&[u8]> {
-                self.iter().rev().collect()
+            fn keys_rev(&self) -> Vec<Vec<u8>> {
+                self.iter().rev().map(|k| k.to_vec()).collect()
             }
-            fn keys_from(&self, x: &[u8]) -> Vec<&[u8]> {
-                self.iter_from(x).collect()
+            fn keys_from(&self, x: &[u8]) -> Vec<Vec<u8>> {
+                self.iter_from(x).map(|k| k.to_vec()).collect()
             }
             fn check(&self) {
                 <$ty<H>>::check(self)
@@ -92,6 +93,7 @@ macro_rules! impl_set {
 
 impl_set!(ZFastTrie);
 impl_set!(ZFastSet);
+impl_set!(ZFastPagedSet);
 
 /// Checks all queries on `x` against a `BTreeSet`.
 fn check_query<S: Set>(trie: &S, set: &BTreeSet<Vec<u8>>, x: &[u8]) {
@@ -99,24 +101,22 @@ fn check_query<S: Set>(trie: &S, set: &BTreeSet<Vec<u8>>, x: &[u8]) {
     assert_eq!(trie.contains(&x), set.contains(&x), "contains({x:?})");
     assert_eq!(
         trie.pred(&x),
-        set.range(..=x.clone()).next_back().map(Vec::as_slice),
+        set.range(..=x.clone()).next_back().cloned(),
         "pred({x:?})"
     );
     assert_eq!(
         trie.pred_strict(&x),
-        set.range(..x.clone()).next_back().map(Vec::as_slice),
+        set.range(..x.clone()).next_back().cloned(),
         "pred_strict({x:?})"
     );
     assert_eq!(
         trie.succ(&x),
-        set.range(x.clone()..).next().map(Vec::as_slice),
+        set.range(x.clone()..).next().cloned(),
         "succ({x:?})"
     );
     assert_eq!(
         trie.succ_strict(&x),
-        set.range((Excluded(x.clone()), Unbounded))
-            .next()
-            .map(Vec::as_slice),
+        set.range((Excluded(x.clone()), Unbounded)).next().cloned(),
         "succ_strict({x:?})"
     );
 }
@@ -125,14 +125,10 @@ fn check_query<S: Set>(trie: &S, set: &BTreeSet<Vec<u8>>, x: &[u8]) {
 fn check_content<S: Set>(trie: &S, set: &BTreeSet<Vec<u8>>) {
     assert_eq!(trie.len(), set.len());
     assert_eq!(trie.is_empty(), set.is_empty());
-    assert!(trie.keys().into_iter().eq(set.iter().map(Vec::as_slice)));
-    assert!(
-        trie.keys_rev()
-            .into_iter()
-            .eq(set.iter().rev().map(Vec::as_slice))
-    );
-    assert_eq!(trie.first(), set.first().map(Vec::as_slice));
-    assert_eq!(trie.last(), set.last().map(Vec::as_slice));
+    assert!(trie.keys().iter().eq(set.iter()));
+    assert!(trie.keys_rev().iter().eq(set.iter().rev()));
+    assert_eq!(trie.first(), set.first().cloned());
+    assert_eq!(trie.last(), set.last().cloned());
 }
 
 /// Performs `ops` random insertions and deletions on a trie whose size
@@ -183,11 +179,7 @@ fn stress<S: Set>(
         if i % 97 == 0 {
             check_content(&trie, &set);
             let from = gen_query(&mut rng, shape, &pool);
-            assert!(
-                trie.keys_from(&from)
-                    .into_iter()
-                    .eq(set.range(from.clone()..).map(Vec::as_slice))
-            );
+            assert!(trie.keys_from(&from).iter().eq(set.range(from.clone()..)));
         }
     }
     trie.check();
@@ -409,6 +401,99 @@ fn test_set_basic() {
     assert!(set.is_empty());
     set.check();
     let set: ZFastSet = ["b", "a", "c", "a"].into_iter().collect();
+    assert_eq!(set.len(), 3);
+    assert!(set.mem_size() > 0);
+    let set = std::thread::spawn(move || set).join().unwrap();
+    assert_eq!((&set).into_iter().count(), 3);
+}
+
+// The same tests for the paged set: the sizes are larger still, so that pages
+// are split and merged
+
+#[test]
+fn test_paged_small() {
+    stress_all::<ZFastPagedSet<Xxh3>>(64, 3000, 12);
+    stress_all::<ZFastPagedSet<Chain>>(64, 3000, 12);
+}
+
+#[test]
+fn test_paged_medium() {
+    stress_all::<ZFastPagedSet<Xxh3>>(64, 6000, 2000);
+    stress_all::<ZFastPagedSet<Chain>>(64, 3000, 1000);
+}
+
+#[test]
+fn test_paged_short_signatures() {
+    for sig_bits in [0, 2, 8] {
+        stress_all::<ZFastPagedSet<Xxh3>>(sig_bits, 3000, 1500);
+    }
+}
+
+#[test]
+fn test_paged_no_check() {
+    for (i, shape) in SHAPES.into_iter().enumerate() {
+        stress::<ZFastPagedSet<Xxh3>>(7000 + i as u64, shape, 64, 100000, 40000, false);
+    }
+}
+
+#[test]
+fn test_paged_order_of_insertion() {
+    let mut rng = rng(0);
+    for shape in SHAPES {
+        let keys = gen_set(&mut rng, shape, 5000);
+        for (insert_rev, remove_rev) in [(false, false), (false, true), (true, false), (true, true)]
+        {
+            let mut set = <ZFastPagedSet>::new();
+            let mut order: Vec<&Vec<u8>> = keys.iter().collect();
+            if insert_rev {
+                order.reverse();
+            }
+            for key in &order {
+                assert!(set.insert(key));
+            }
+            set.check();
+            assert!(set.iter().map(|k| k.to_vec()).eq(keys.iter().cloned()));
+            order.sort();
+            if remove_rev {
+                order.reverse();
+            }
+            for (i, key) in order.iter().enumerate() {
+                assert!(set.remove(key));
+                if i % 37 == 0 {
+                    set.check();
+                }
+            }
+            assert!(set.is_empty());
+            set.check();
+        }
+    }
+}
+
+#[test]
+fn test_paged_basic() {
+    let mut set = <ZFastPagedSet>::new();
+    assert!(!set.contains(""));
+    assert!(set.pred("a").is_none());
+    assert!(set.succ("a").is_none());
+    assert!(set.first().is_none());
+    assert!(set.last().is_none());
+    assert!(!set.remove("a"));
+    assert!(set.insert(""));
+    assert!(set.contains(""));
+    assert!(!set.insert(""));
+    assert!(set.insert("a"));
+    assert!(set.insert([0_u8]));
+    assert_eq!(
+        set.iter().map(|k| k.to_vec()).collect::<Vec<_>>(),
+        vec![b"".to_vec(), vec![0], b"a".to_vec()]
+    );
+    assert_eq!(format!("{set:?}"), "{[], [0], [97]}");
+    assert!(set.remove(""));
+    assert_eq!(set.len(), 2);
+    set.clear();
+    assert!(set.is_empty());
+    set.check();
+    let set: ZFastPagedSet = ["b", "a", "c", "a"].into_iter().collect();
     assert_eq!(set.len(), 3);
     assert!(set.mem_size() > 0);
     let set = std::thread::spawn(move || set).join().unwrap();

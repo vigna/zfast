@@ -8,7 +8,7 @@
 
 mod check;
 pub(crate) mod key;
-mod map;
+pub(crate) mod map;
 
 use crate::utils::{HashPrefixes, PrefixHasher, Xxh3, fat_binary_search, jump, lcp, two_fattest};
 use key::Key;

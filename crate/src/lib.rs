@@ -10,6 +10,7 @@ mod bucketed;
 mod dynamic;
 mod fixed;
 mod keys;
+mod paged;
 pub mod utils;
 
 pub use bucketed::{Iter as SetIter, ZFastSet};
@@ -19,3 +20,4 @@ pub use fixed::{
     StaticZFastTrie,
 };
 pub use keys::{KeySeq, PackedKeys};
+pub use paged::{Iter as PagedIter, PagedKey, ZFastPagedSet};
