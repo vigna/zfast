@@ -92,12 +92,15 @@ def result_file(method, dataset, n, results=None):
 def cmd_bench(args):
     names = methods(args.method)
     tools = {METHODS[m]["tool"] for m in names}
-    targets = ["build/zfast-bench"] + (["build/wh_bench"] if "wormhole" in tools else [])
+    targets = ["build/zfast-bench"]
+    targets += sorted({"build/wh_bench" + METHODS[m].get("arg", "") for m in names if METHODS[m]["tool"] == "wormhole"})
     targets += ["build/art_bench"] if "art" in tools else []
     targets += sorted({"build/bt_bench-" + METHODS[m]["arg"] for m in names if METHODS[m]["tool"] == "btree-cpp"})
     if not args.no_build:
         run(["make", "-C", HERE] + targets, args.dry_run)
     pin = shlex.split(args.pin) if args.pin else []
+    # The same memory allocator for all drivers
+    env = dict(os.environ, LD_PRELOAD=args.preload) if args.preload else None
     for dataset in args.dataset.split(","):
         for n in [int(x) for x in args.n.split(",")]:
             prefix = workload(dataset, n, args)
@@ -114,8 +117,8 @@ def cmd_bench(args):
                 elif method["tool"] == "btree-cpp":
                     cmd = [os.path.join(BUILD, "bt_bench-" + method["arg"]), prefix, str(args.reps)]
                 else:
-                    cmd = [os.path.join(BUILD, "wh_bench"), prefix, str(args.reps)]
-                done = run(pin + cmd, args.dry_run, capture_output=True, text=True)
+                    cmd = [os.path.join(BUILD, "wh_bench" + method.get("arg", "")), prefix, str(args.reps)]
+                done = run(pin + cmd, args.dry_run, capture_output=True, text=True, env=env)
                 if done is None:
                     continue
                 os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -235,6 +238,9 @@ def main():
                            help="maximum number of successful and of unsuccessful queries (default: one per key); "
                                 "workloads and results are then stored under the name DATASET.qQUERIES")
             p.add_argument("--pin", default="", help='a command prefix pinning the CPU, e.g. "taskset -c 8"')
+            p.add_argument("--preload", default="",
+                           help="a shared library to preload in all drivers, such as a memory allocator "
+                                "(e.g., /usr/lib64/libjemalloc.so.2)")
             p.add_argument("--force", action="store_true", help="rerun existing results")
             p.add_argument("--no-build", action="store_true",
                            help="do not build the drivers (necessary when running several instances in parallel)")

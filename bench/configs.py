@@ -4,7 +4,8 @@ Configuration of the comparative benchmarks of z-fast tries.
 Each entry of METHODS specifies:
   - tool: "rust" (the driver zfast-bench, covering the structures of the
     zfast crate and the baselines from the Rust standard library) or
-    "wormhole" (the C driver wh_bench), "art" (the C++ driver art_bench) or
+    "wormhole" (the C driver wh_bench, built also with 256 keys per leaf:
+    arg "-256"), "art" (the C++ driver art_bench) or
     "btree-cpp" (the C++ driver bt_bench, built once for each configuration of
     the code of Mueller, Benson and Leis: their adaptive B-tree, and their
     version of HOT);
@@ -44,6 +45,10 @@ METHODS = {
     "Wormhole": {
         "tool": "wormhole", "kind": "dynamic",
         "label": "Wormhole", "tex": "Wormhole",
+    },
+    "Wormhole256": {
+        "tool": "wormhole", "arg": "-256", "kind": "dynamic",
+        "label": "Wormhole (256 keys per leaf)", "tex": "Wormhole$_{256}$",
     },
     "AdaptiveBTree": {
         "tool": "btree-cpp", "arg": "adapt2", "kind": "dynamic",
