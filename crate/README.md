@@ -42,7 +42,7 @@ answers are always exact.
 A dynamic sorted set of byte strings designed for sets that do not fit the
 cache, where the cost of an operation is the number of cache misses it
 causes, one after the other. Keys are stored, without the prefix they share,
-in pages of four kilobytes; up to 64 consecutive pages form a *segment*, and a
+in pages of four kilobytes; up to 128 consecutive pages form a *segment*, and a
 z-fast trie (the *router*) indexes the segments through short separators.
 The router has thus one leaf every few thousand keys, and fits the cache even
 for sets with billions of keys; moreover, it works on signatures only, and it
@@ -188,7 +188,13 @@ common.
 ```text
 cargo test --features epserde
 cargo test --release --features epserde,slow_tests
+ZFAST_SEGMENT_PAGES=16 cargo test --test test_dynamic paged
 ```
+
+The last command builds `ZFastPagedSet` with small segments, so that the
+tests that check all invariants after every update exercise also the
+creation and deletion of segments, and thus the router (which has also a
+randomized test of its own).
 
 There are [Criterion] benchmarks for the most common operations, with
 `BTreeSet` and binary search as baselines:

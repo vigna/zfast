@@ -38,7 +38,7 @@ use crate::utils::{lcp, lcp_from, prefetch};
 /// make the router smaller, at the price of more lines to fetch in a segment.
 pub(super) const MAX_PAGES: usize = match option_env!("ZFAST_SEGMENT_PAGES") {
     Some(s) => crate::utils::parse_usize(s),
-    None => 64,
+    None => 128,
 };
 const _: () = assert!(MAX_PAGES.is_power_of_two() && MAX_PAGES >= 16 && MAX_PAGES <= 128);
 /// The number of bits of the slot of a page.
@@ -183,8 +183,8 @@ pub(super) struct Segment {
     /// the position, or [`NO_NODE`].
     left: [u8; MAX_PAGES],
     right: [u8; MAX_PAGES],
-    /// The hash table: an entry contains a few bits of hash (14, for
-    /// segments of 64 pages), the slot of a page and the offset of a blob.
+    /// The hash table: an entry contains a few bits of hash (13, for
+    /// segments of 128 pages), the slot of a page and the offset of a blob.
     table: [u32; TABLE],
 }
 

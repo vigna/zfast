@@ -133,7 +133,7 @@ impl Anchors for Slab<Segment> {
 ///
 /// The keys are partitioned into consecutive intervals, each stored in a
 /// *page* of four kilobytes: the keys of a page are stored in the page,
-/// without the prefix they share. Consecutive pages (up to 64) form a
+/// without the prefix they share. Consecutive pages (up to 128) form a
 /// *segment*, and the smallest strings of the intervals of the segments,
 /// which are short separators, are indexed by a z-fast trie, the *router*.
 ///

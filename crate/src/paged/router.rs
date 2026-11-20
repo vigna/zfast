@@ -199,7 +199,10 @@ enum Rel {
 /// string ends there.
 #[inline(always)]
 fn relation(x: &[u8], from: usize, known: &[u8], whole: bool) -> Rel {
-    let tail = &x[from..];
+    // A false positive can lead to a node whose handle is longer than x
+    let Some(tail) = x.get(from..) else {
+        return Rel::Unknown;
+    };
     let n = known.len().min(tail.len());
     match tail[..n].cmp(&known[..n]) {
         std::cmp::Ordering::Less => Rel::Less,
@@ -988,5 +991,103 @@ impl<H: HashPrefixes> Router<H> {
             leaves
         );
         leaves
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::{Chain, Xxh3};
+
+    /// The strings of the leaves, indexed by leaf.
+    struct Strings(Vec<Vec<u8>>);
+
+    impl Anchors for Strings {
+        fn low(&self, id: u32) -> &[u8] {
+            &self.0[id as usize]
+        }
+    }
+
+    fn next(state: &mut u64) -> usize {
+        *state ^= *state << 13;
+        *state ^= *state >> 7;
+        *state ^= *state << 17;
+        (*state >> 11) as usize
+    }
+
+    /// Returns a string on a small alphabet, sometimes with a long prefix
+    /// shared with other strings, and sometimes an extension of an existing
+    /// string.
+    fn string(state: &mut u64, strings: &[Vec<u8>]) -> Vec<u8> {
+        let mut s = match next(state) % 4 {
+            0 => vec![b'p'; next(state) % 40],
+            1 => strings[next(state) % strings.len()].clone(),
+            _ => Vec::new(),
+        };
+        for _ in 0..next(state) % 6 {
+            s.push(b"\0ab\xff"[next(state) % 4]);
+        }
+        s
+    }
+
+    fn stress<H: HashPrefixes>(sig_bits: u32, steps: usize) {
+        let mut state = 0x9E37_79B9_7F4A_7C15 ^ sig_bits as u64;
+        let mut strings = Strings(vec![Vec::new()]);
+        let mut router = <Router<H>>::new(sig_bits);
+        // The leaves, in order
+        let mut order = vec![0_u32];
+        for step in 0..steps {
+            if order.len() < 2 || next(&mut state) % 5 < 3 {
+                let s = string(&mut state, &strings.0);
+                let pos = order.partition_point(|&id| strings.0[id as usize] < s);
+                if pos < order.len() && strings.0[order[pos] as usize] == s {
+                    continue;
+                }
+                let id = strings.0.len() as u32;
+                strings.0.push(s);
+                let after = order.get(pos).copied().unwrap_or(NONE);
+                router.insert(id, order[pos - 1], after, &strings);
+                order.insert(pos, id);
+            } else {
+                let pos = 1 + next(&mut state) % (order.len() - 1);
+                let after = order.get(pos + 1).copied().unwrap_or(NONE);
+                router.remove(order[pos], after, &strings);
+                order.remove(pos);
+            }
+            if step % 16 == 0 || order.len() < 8 {
+                router.check(&order, &strings);
+            }
+            for _ in 0..4 {
+                let x = string(&mut state, &strings.0);
+                let pos = order.partition_point(|&id| strings.0[id as usize] <= x);
+                let expected = order[pos - 1];
+                assert_eq!(router.locate(&x, &strings), expected);
+                let candidates = router.candidates(&x, &router.hasher(&x));
+                // With long signatures the candidates contain the result
+                if sig_bits == 64 {
+                    assert!(
+                        candidates.as_slice().contains(&expected),
+                        "{x:?}: {candidates:?}, expected {expected}"
+                    );
+                }
+            }
+        }
+        // Remove all leaves but the first one
+        while order.len() > 1 {
+            let pos = 1 + next(&mut state) % (order.len() - 1);
+            let after = order.get(pos + 1).copied().unwrap_or(NONE);
+            router.remove(order[pos], after, &strings);
+            order.remove(pos);
+            router.check(&order, &strings);
+        }
+    }
+
+    #[test]
+    fn test_router() {
+        let steps = if cfg!(miri) { 300 } else { 6000 };
+        for sig_bits in [64, 8, 2, 0] {
+            stress::<Xxh3>(sig_bits, steps);
+            stress::<Chain>(sig_bits, steps / 4);
+        }
     }
 }

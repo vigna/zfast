@@ -2494,7 +2494,7 @@ delimited by the \emph{separator} of the page, which is stored in the page, and 
 separating adjacent keys at the time a page is split, and the keys of a page are stored without the 
 prefix common to the two separators, as in prefix B-trees~\cite{Bayer1977Prefix}. A page contains an array of entries sorted by key, each formed by the first four bytes 
 of the key following the common prefix~\cite{Graefe2001Btree}, the position of the key in the page, and a few bits of its hash. 
-\item Up to $64$ consecutive pages form a \emph{segment}. A segment contains a hash table mapping each of its keys 
+\item Up to $128$ consecutive pages form a \emph{segment}. A segment contains a hash table mapping each of its keys 
 to its page and to its position in the page, which is used by membership queries: a key is thus reached by accessing a line of the table 
 and then the key. A segment contains also a \emph{blind directory} of its pages, in the style of the nodes of a string B-tree~\cite{FeGSBT}
 (see also the partial keys of~\cite{Bohannon2001Main}): for each pair of adjacent separators, we store the length of their longest common prefix 
