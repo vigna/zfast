@@ -47,16 +47,23 @@ same order, and each driver prints checksums that `report` compares. Results
 are stored per data point in `bench/results`, so a campaign can be interrupted
 and resumed.
 
-The runs of the paper are started by `bench/paper.sh URLS [CORE]`, which
-discards the URLs longer than 255 bytes (HOT and the B-tree limit the length
-of the keys) and runs all methods on two sizes. The tables of the paper are
-generated from the results stored in `paper/results-epyc` (obtained on an AMD
-EPYC 9R45):
+The runs of the paper are started by `bench/paper.sh URLS`, where `URLS` is a
+file of distinct URLs of at most 255 bytes in random order (HOT and the B-tree
+limit the length of the keys; the comments in the script explain how we
+obtained it from the eu-2015 crawl). The script runs all methods on 5 and 50
+million keys, and the main ones on 500 million. On very large sets, the option
+`--queries` of `run.py bench` bounds the number of queries (the results are
+then stored under the name `DATASET.qQUERIES`), the environment variable
+`ZFAST_PRESHUFFLED` makes the driver read the first lines of a file that is
+already in random order, and `--no-build` makes it possible to run several
+instances at the same time. The tables of the paper are generated from the
+results stored in `paper/results-epyc` (obtained on an AMD EPYC 9R45):
 
 ```text
-python3 bench/run.py table --results paper/results-epyc --dataset eu-urls \
-    --n 10000000 --kind dynamic --method ZFastSet,ZFastTrie,Wormhole,BTreeSet \
-    --out paper/fig/bench-dynamic-10000000.tex
+python3 bench/run.py table --results paper/results-epyc \
+    --dataset eu-2015.q10000000 --n 1000000000 --kind dynamic \
+    --method ZFastPagedSet,Wormhole,AdaptiveBTree,HOT \
+    --out paper/fig/bench-dynamic-1000000000.tex
 ```
 
 The drivers are `bench/zfast-bench` (Rust: the structures of the crate and the
@@ -69,7 +76,8 @@ by the C++ drivers), and add an entry to `bench/configs.py`.
 
 Some limitations of the competitors are documented at the top of each driver:
 in particular, the adapter of HOT has no deletions, ART needs keys without
-zeros, and the ART bundled with btree-cpp is not used because it returns a few
+zeros and answers successor queries with a range scan that is not designed
+for a single result, and the ART bundled with btree-cpp is not used because it returns a few
 wrong answers for keys not in the set.
 
 ## License
