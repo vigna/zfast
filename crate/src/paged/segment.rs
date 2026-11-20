@@ -32,9 +32,19 @@ use super::slab::{Block, Slab};
 use crate::utils::{lcp, lcp_from, prefetch};
 
 /// The maximum number of pages in a segment.
-pub(super) const MAX_PAGES: usize = 64;
+///
+/// The value can be changed at compile time with the environment variable
+/// `ZFAST_SEGMENT_PAGES` (a power of two between 16 and 128): larger segments
+/// make the router smaller, at the price of more lines to fetch in a segment.
+pub(super) const MAX_PAGES: usize = match option_env!("ZFAST_SEGMENT_PAGES") {
+    Some(s) => crate::utils::parse_usize(s),
+    None => 64,
+};
+const _: () = assert!(MAX_PAGES.is_power_of_two() && MAX_PAGES >= 16 && MAX_PAGES <= 128);
+/// The number of bits of the slot of a page.
+const SLOT_BITS: u32 = MAX_PAGES.trailing_zeros();
 /// The number of entries of the hash table (a power of two).
-const TABLE: usize = 4096;
+const TABLE: usize = MAX_PAGES * 64;
 /// The maximum number of keys in a segment.
 pub(super) const MAX_KEYS: usize = TABLE * 3 / 4;
 /// If the number of nonempty entries reaches this value, the table must be
@@ -133,12 +143,12 @@ impl Fence {
 /// A segment.
 #[repr(C, align(64))]
 pub(super) struct Segment {
+    /// The slots of `pages` that are in use.
+    slots: u128,
     /// The previous segment, or [`NONE`].
     pub(super) prev: u32,
     /// The next segment, or [`NONE`].
     pub(super) next: u32,
-    /// The slots of `pages` that are in use.
-    slots: u64,
     /// The number of keys.
     keys: u16,
     /// The number of nonempty entries of the table.
@@ -148,7 +158,7 @@ pub(super) struct Segment {
     init: bool,
     /// The root of the descent tree, or [`NO_NODE`].
     root: u8,
-    _pad: [u8; 41],
+    _pad: [u8; 33],
     /// The separator of the first page.
     low: Fence,
     /// The separator of the first page of the next segment, if any.
@@ -173,8 +183,8 @@ pub(super) struct Segment {
     /// the position, or [`NO_NODE`].
     left: [u8; MAX_PAGES],
     right: [u8; MAX_PAGES],
-    /// The hash table: an entry contains 14 bits of hash, the slot of a page
-    /// and the offset of a blob.
+    /// The hash table: an entry contains a few bits of hash (14, for
+    /// segments of 64 pages), the slot of a page and the offset of a blob.
     table: [u32; TABLE],
 }
 
@@ -201,8 +211,8 @@ unsafe impl Block for Segment {
 #[inline(always)]
 pub(super) fn home_tag(hash: u64) -> (u16, u32) {
     (
-        ((hash >> 20) as usize & (TABLE - 1)) as u16,
-        ((hash >> 32) as u32 & 0x3FFF) << 18,
+        ((hash >> 16) as usize & (TABLE - 1)) as u16,
+        ((hash >> 34) as u32) << LOC_BITS,
     )
 }
 
@@ -212,7 +222,9 @@ fn loc(slot: usize, off: u16) -> u32 {
     (slot as u32) << 12 | off as u32
 }
 
-const LOC_MASK: u32 = (1 << 18) - 1;
+/// The number of bits of an entry containing a slot and an offset.
+const LOC_BITS: u32 = 12 + SLOT_BITS;
+const LOC_MASK: u32 = (1 << LOC_BITS) - 1;
 
 impl Segment {
     /// Initializes an empty segment with the given fences.
@@ -674,7 +686,7 @@ impl Segment {
         let n = self.npages as usize;
         assert!((1..=MAX_PAGES).contains(&n));
         assert_eq!(self.slots.count_ones() as usize, n);
-        let mut seen = 0_u64;
+        let mut seen = 0_u128;
         for pos in 0..n {
             let slot = self.order[pos] as usize;
             assert!(self.slots & (1 << slot) != 0 && seen & (1 << slot) == 0);

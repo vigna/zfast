@@ -80,7 +80,7 @@ pub(crate) fn prefetch<T>(ptr: *const T) {
     let _ = ptr;
 }
 
-const fn parse_usize(s: &str) -> usize {
+pub(crate) const fn parse_usize(s: &str) -> usize {
     let s = s.as_bytes();
     let mut n = 0;
     let mut i = 0;

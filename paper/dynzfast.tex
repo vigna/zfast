@@ -2474,7 +2474,7 @@ the search is repeated by walking down the trie.
 than preprocessing the key and storing the state of a hash function every eight bytes, in spite of the discussion above.
 \end{itemize}
 
-There are three data structures. The first one, \texttt{ZFastTrie}, is the dynamic z-fast trie described in this paper, with jump pointers 
+There are four data structures. The first one, \texttt{ZFastTrie}, is the dynamic z-fast trie described in this paper, with jump pointers 
 maintained using the stack of $2$-fat ancestors and a doubly linked list of leaves. The second one, \texttt{StaticZFastTrie}, is a static z-fast trie on a sorted
 sequence of strings in which a node is represented by the interval of ranks of the keys in its subtree, so that there are no pointers, 
 and queries return ranks; the trie can index just one key every $k$ (the \emph{sampling ratio}), in which case a query is completed by 
@@ -2483,6 +2483,43 @@ monotone sequences. The third one, \texttt{ZFastSet}, has the organization of a 
 Wormhole~\cite{WNJWormhole}: the keys are stored in buckets of at most $64$ keys, and a \texttt{ZFastTrie} indexes the shortest strings separating consecutive buckets. 
 Each bucket contains, for each key, a $16$-bit hash, used for membership queries, and the eight bytes following the prefix common to the keys of the bucket,
 used for ordered searches, so that in most cases a single key has to be compared with the query. 
+
+The fourth one, \texttt{ZFastPagedSet}, is designed for sets much larger than the cache, where the cost of an operation is 
+the number of cache misses that have to be served one after the other, rather than the number of instructions. It combines 
+a z-fast trie with techniques from the literature on B-trees discussed in Section~\ref{sec:related}, 
+and it is organized on three levels.
+\begin{itemize}
+\item Keys are stored in \emph{pages} of four kilobytes, as in a B-tree. A page contains the keys of an interval of strings 
+delimited by the \emph{separator} of the page, which is stored in the page, and by that of the next page; separators are the shortest strings
+separating adjacent keys at the time a page is split, and the keys of a page are stored without the 
+prefix common to the two separators, as in prefix B-trees~\cite{Bayer1977Prefix}. A page contains an array of entries sorted by key, each formed by the first four bytes 
+of the key following the common prefix~\cite{Graefe2001Btree}, the position of the key in the page, and a few bits of its hash. 
+\item Up to $64$ consecutive pages form a \emph{segment}. A segment contains a hash table mapping each of its keys 
+to its page and to its position in the page, which is used by membership queries: a key is thus reached by accessing a line of the table 
+and then the key. A segment contains also a \emph{blind directory} of its pages, in the style of the nodes of a string B-tree~\cite{FeGSBT}
+(see also the partial keys of~\cite{Bohannon2001Main}): for each pair of adjacent separators, we store the length of their longest common prefix 
+and the two bytes that follow it, four bytes in all. This information defines a compacted trie on the separators without the labels 
+of the arcs: a descent in the trie following the bytes of a string provides a page; the string is then compared with the separator of that page, and
+the length of their longest common prefix is sufficient, except in rare cases, to find the page containing the string by scanning the directory. 
+Finally, a segment contains the first separator of the segment and that of the next one (its \emph{fences}).
+\item The first separators of the segments are indexed by a z-fast trie, the \emph{router}. The router is small, as it has one leaf every few thousand keys,
+whatever their length: on our data, it uses less than $80$ bytes per segment, that is, less than $0.04$ bytes per key. 
+Moreover, it never accesses a string: it performs a fat binary search using signatures, as described in Section~\ref{sec:sign}, 
+on a z-map whose entries are self-contained; the node so found contains the first and the last segment of its subtree, the segment preceding the first one, 
+a signature of its extent, and the first eight bytes of its extent following the handle. These data are sufficient to determine, 
+in most cases, the segment containing the string, assuming that the signatures did not lie, and in the remaining cases two candidate segments. 
+The fences of a candidate segment tell whether the string belongs to it: if no candidate passes the test, the string is searched exactly by walking down the trie, 
+reading the extents from the fences. Thus, the router is modified only when a segment is created or deleted, which happens once every few thousand insertions or deletions,
+and for this reason its nodes need neither jump pointers nor the machinery of Section~\ref{sec:addupdates} to maintain them: when the trie changes, 
+the first and last segment of a subtree are simply updated by walking towards the root.
+\end{itemize}
+The purpose of this organization is that an operation accesses, besides the router, which fits the cache even for very large sets, 
+a number of memory locations that is small and does not depend on the size of the set: a segment and a key for membership queries, 
+and a segment, usually one page and a key for order queries and updates. Moreover, the cache lines to be accessed in a segment or in a page
+are known as soon as the segment or the page is known, so they can be requested at the same time. With respect to a B-tree, 
+the z-fast trie replaces the internal nodes, and the pages are grouped so that a hash table and a small directory can replace the last level of internal nodes; 
+with respect to Wormhole, whose hash table contains all prefixes of the separators, the index is a compacted trie with one node per segment.
+The memory for pages and segments is requested to the operating system in large chunks, backed by huge pages.
 
 We compare these structures with Wormhole (using its single-threaded interface), with the B-tree of the Rust standard library (\texttt{BTreeSet}, whose 
 nodes contain up to $11$ pointers to keys: it uses none of the techniques for strings discussed in Section~\ref{sec:related}), and, in the static case, with a binary search on the sorted keys, 

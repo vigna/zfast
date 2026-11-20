@@ -34,7 +34,9 @@
 
 use super::page::NONE;
 use crate::dynamic::map::HandleMap;
-use crate::utils::{HashPrefixes, PrefixHasher, fat_binary_search, lcp, lcp_from, two_fattest};
+use crate::utils::{
+    HashPrefixes, PrefixHasher, fat_binary_search, lcp, lcp_from, prefetch, two_fattest,
+};
 use std::marker::PhantomData;
 
 /// The bit marking the identifier of a leaf (i.e., of a page) among the
@@ -407,6 +409,9 @@ impl<H: HashPrefixes> Router<H> {
                     let (extent, id) = self
                         .map
                         .find(h & self.sig_mask, f, |id| self.handle_len(id) == f)?;
+                    // The last node that is hit will be accessed at the end
+                    // of the search: we fetch it while the search goes on
+                    prefetch(self.nodes.as_ptr().wrapping_add(id as usize));
                     top = id;
                     Some(extent)
                 },
