@@ -341,3 +341,71 @@ whose z-map is out of the cache, 4-7% faster; it makes the two structures with
 a small z-map slower, as expected, because the extra hashes buy nothing. The
 run with three levels shared a core with another benchmark and is not valid:
 it must be repeated. Not yet measured at 500 million keys.
+
+## 7. Results with all competitors in their best configuration
+
+The campaign of `paper/results-epyc-tuned/` (script `bench/paper.sh`): GCC
+16.2.0 and clang 23.1.6 built from source, jemalloc preloaded, transparent
+huge pages for all processes, Wormhole with 128 and 256 keys per leaf, B-tree
+with 16 KiB nodes. Memory is the resident set size per key, keys included
+(the URLs take about 79 bytes each).
+
+**5 million keys**
+
+| | add | cont.⁺ | cont.⁻ | succ⁺ | succ⁻ | scan | del | RSS B/key |
+|---|---|---|---|---|---|---|---|---|
+| `ZFastPagedSet` | 660 | 360 | 150 | 376 | 644 | 10.4 | 518 | 108 |
+| Wormhole | 440 | 257 | 161 | 290 | 878 | 10.2 | 368 | 126 |
+| Wormhole, 256 keys per leaf | 413 | 238 | 145 | 279 | 915 | 9.6 | 343 | 123 |
+| adaptive B-tree | 358 | 443 | 251 | 638 | 657 | 8.3 | 640 | 130 |
+| HOT | 557 | 396 | 356 | 465 | 563 | 46.6 |  | 106 |
+| ART | 612 | 704 | 551 | 1838 | 1854 | 88.6 | 805 | 134 |
+| `ZFastSet` | 767 | 548 | 259 | 550 | 806 | 10.5 | 645 | 120 |
+| `ZFastTrie` | 733 | 788 | 689 | 792 | 918 | 107 | 943 | 159 |
+| `BTreeSet` | 642 | 716 | 727 | 726 | 730 | 16.7 | 703 | 110 |
+
+**50 million keys**
+
+| | add | cont.⁺ | cont.⁻ | succ⁺ | succ⁻ | scan | del | RSS B/key |
+|---|---|---|---|---|---|---|---|---|
+| `ZFastPagedSet` | 835 | 458 | 280 | 481 | 782 | 9.8 | 567 | 97 |
+| Wormhole | 731 | 382 | 308 | 448 | 1105 | 10.5 | 711 | 127 |
+| Wormhole, 256 keys per leaf | 701 | 336 | 256 | 418 | 1190 | 10.1 | 652 | 126 |
+| adaptive B-tree | 593 | 747 | 537 | 945 | 951 | 8.3 | 1219 | 119 |
+| HOT | 815 | 576 | 550 | 637 | 745 | 45.3 |  | 105 |
+| ART | 1066 | 1143 | 985 | 2510 | 2514 | 89.8 | 1494 | 134 |
+| `ZFastSet` | 1128 | 929 | 640 | 884 | 1125 | 10.7 | 1045 | 123 |
+| `ZFastTrie` | 940 | 876 | 780 | 885 | 1005 | 134 | 1150 | 168 |
+| `BTreeSet` | 1050 | 1098 | 1119 | 1108 | 1124 | 18.1 | 1260 | 113 |
+
+**500 million keys**
+
+| | add | cont.⁺ | cont.⁻ | succ⁺ | succ⁻ | scan | del | RSS B/key |
+|---|---|---|---|---|---|---|---|---|
+| `ZFastPagedSet` | 1017 | 543 | 389 | 579 | 987 | 8.8 | 790 | 83 |
+| Wormhole | 1004 | 540 | 466 | 611 | 1332 | 15.3 | 1236 | 126 |
+| Wormhole, 256 keys per leaf | 950 | 486 | 409 | 595 | 1391 | 12.5 | 1161 | 124 |
+| adaptive B-tree | 913 | 1149 | 938 | 1577 | 1472 | 9.2 | 1531 | 101 |
+| HOT | 1052 | 784 | 768 | 868 | 981 | 46.2 |  | 105 |
+| `ZFastSet` | 1480 | 1222 | 973 | 1226 | 1480 | 11.5 | 1454 | 123 |
+| `BTreeSet` | 2058 | 3322 | 3442 | 3371 | 3474 | 39.2 | 3870 | 113 |
+What the tables say about `ZFastPagedSet`:
+
+- At 5 million keys it is not competitive on insertions and successful
+  lookups (Wormhole takes about a third less time on both, the B-tree 46%
+  less on insertions); it is second on unsuccessful membership.
+- At 50 million keys it leads on deletion and memory, and is within 5% of the
+  best on unsuccessful successors (HOT); Wormhole with large leaves leads on
+  lookups and the B-tree on insertions.
+- At 500 million keys it leads on unsuccessful membership (5% over Wormhole
+  with large leaves), on the successor of a key in the set (3%), on scans (4%
+  over the B-tree), on deletion (32%) and on memory (18% less than the
+  B-tree); it is level with HOT on unsuccessful successors; it loses
+  successful membership to Wormhole with large leaves by 12%, and insertions
+  to the B-tree by 11%.
+- It is the only structure that at 500 million keys is within 12% of the best
+  on every operation. Its times grow by 19-39% from 50 to 500 million keys;
+  those of Wormhole with large leaves by 17-78%, those of the B-tree by 26-75%.
+
+Read together with Section 4: these margins come from the segments and the
+pages, not from the router.
