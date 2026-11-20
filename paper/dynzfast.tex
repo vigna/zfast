@@ -313,7 +313,7 @@ interval $[x\..y)$, respectively).
 We work in the standard RAM model with a word of length $w$, whose instructions include addition, subtraction,
 bitwise Boolean operations, shifts and multiplication. Multiplication is used only to compute hash functions, both for the
 dictionary and for signatures: computing the most significant bit of a word, which requires constant time with
-multiplication~\cite{FrWSITBFT}, can be avoided (see Section~\ref{sec:improvements}). On the other hand, multiplication cannot
+multiplication~\cite[Section~5]{FrWSITBFT}, can be avoided (see Section~\ref{sec:improvements}). On the other hand, multiplication cannot
 be dispensed with in general, as on a RAM whose instructions are all in $\mathrm{AC}^0$ a dictionary using linear
 space cannot answer queries in constant time~\cite{Andersson1996Static}, even if the instruction set contains the computation of the
 most significant bit~\cite{Thorup2003AC0}; it can be replaced by a table using $o(n)$ words when $w=O(\lg n)$~\cite{Thorup2003AC0}.
@@ -382,10 +382,13 @@ of the function computing the signatures. In particular:
   dynamic perfect hashing~\cite{DKMDPHULB} or Cuckoo hashing~\cite{PaRCH}, the query bounds of Theorem~\ref{th:bounds} are worst-case bounds,
   the query bounds of Theorem~\ref{th:boundslong} hold with high probability, and the update bounds hold in expectation (amortized).
   \item There are dictionaries in which every operation takes constant time in the worst case with high probability.
+  The first one is the real-time dictionary of Dietzfelbinger and Meyer auf der Heide~\cite{Dietzfelbinger1990New}: 
+  it uses space linear in the current number $n$ of keys, lookups always take constant time, and for every constant $k$, 
+  with probability $1-O(n^{-k})$ each of the next $n/2$ operations takes constant time.
   If an upper bound $N$ on $n$ is known in advance, de-amortized Cuckoo hashing~\cite{Arbitman2009Deamortized} and
   backyard Cuckoo hashing~\cite{Arbitman2010Backyard} use $O(N)$ words, and for every
   sequence of $N^{O(1)}$ operations, with probability $1-1/N^{O(1)}$ every operation takes constant time
-  (the results are stated for keys of one word). The bound $N$ is not necessary: iceberg hashing~\cite{Bender2023Iceberg} 
+  (the results are stated for keys of one word). Iceberg hashing~\cite{Bender2023Iceberg}, like the dictionary of~\cite{Dietzfelbinger1990New}, does not need the bound $N$: it 
   uses space linear in the current number $n$ of keys, which can be as large as $\Theta(w)$ bits, resizing the table incrementally, 
   and each operation takes constant time with high probability in $n$. With such dictionaries all bounds of 
   Theorems~\ref{th:bounds} and~\ref{th:boundslong}, including those for updates, hold with high probability.
@@ -414,17 +417,21 @@ version of this paper~\cite{BBVDZT}.
 \label{sec:related}
 
 \paragraph{Predecessor search on integers.} For $n$ integers of $\ell\leq w$ bits, van Emde Boas 
-trees~\cite{EKZDIEPQ} answer predecessor queries and perform updates in time $O(\lg \ell)$, 
-but use space depending on the size of the universe. Willard's \emph{x-fast trie}~\cite{WilLLWRQ} 
+trees~\cite{vanEmdeBoas1975Preserving,EKZDIEPQ} answer predecessor queries and perform updates in time $O(\lg \ell)$ in the worst case, 
+but use space depending on the size of the universe ($O(2^\ell)$ words, using buckets~\cite{vanEmdeBoas1977Preserving}). 
+Willard's \emph{x-fast trie}~\cite{WilLLWRQ} 
 stores all prefixes of all keys in hash tables, one for each prefix length, and finds 
 the longest prefix of a query that is a prefix of some key by a binary search on the prefix length; 
 the \emph{y-fast trie}~\cite{WilLLWRQ} brings space down to linear by storing the keys in buckets of 
-$\Theta(\ell)$ consecutive keys and indexing one key per bucket with an x-fast trie, at the price of amortized 
-bounds for updates. Mehlhorn and N\"aher~\cite{MeNBOD} obtain similar results from the recursion of 
-van Emde Boas using dynamic perfect hashing~\cite{DKMDPHULB}, and need buckets to attain linear space. 
+$\Theta(\ell)$ consecutive keys, each represented by a binary search tree, and indexing one key per bucket with an x-fast trie. 
+Both structures answer queries in time $O(\lg\ell)$ in the worst case. Willard's hash tables are static: 
+with dynamic perfect hashing~\cite{DKMDPHULB}, the y-fast trie supports updates in amortized expected time $O(\lg\ell)$~\cite{FrWSITBFT}. 
+Mehlhorn and N\"aher~\cite{MeNBOD} obtain the same bounds applying dynamic perfect hashing directly to the recursion of 
+van Emde Boas, and need buckets (of $\Theta(\lg\ell)$ keys) to attain linear space. 
 All these structures reduce the \emph{length} of the keys, 
 and their time bounds do not depend on $n$. The other approach reduces the \emph{number} of keys: fusion
-trees~\cite{FrWSITBFT} answer queries in time $O(\lg n/\lg w)$, and the exponential search trees of 
+trees~\cite{FrWSITBFT} answer queries in time $O(\lg n/\lg w)$ in the static case, and support queries and updates in 
+amortized time $O(\lg n/\lg\lg n)$, and the exponential search trees of 
 Andersson and Thorup~\cite{AnTDOSEST} provide deterministic, worst-case bounds in linear space for
 queries and updates, such as $O\bigl(\sqrt{\lg n/\lg\lg n}\bigr)$ (using the static structure of Beame and Fich~\cite{Beame2002Optimal}, who also show that this bound is optimal as a function of $n$ alone).
 
@@ -461,7 +468,7 @@ $40$ and $64$ bits, including variants of y-fast tries and dynamic fusion nodes.
 
 Other queries on integers are easier than predecessor search: for instance, Mortensen, Pagh and P\u{a}tra\c{s}cu~\cite{Mortensen2005Dynamic} 
 show that in linear space one can report an element of a query interval (i.e., answer existential range queries, and thus existential prefix
-queries) in time $O(\lg\lg w)$ with updates in time $O(\lg w)$, with high probability. The z-fast trie answers 
+queries) in time $O(\lg\lg w)$ with updates in time $O(\lg w)$, with high probability; in the static case, constant time is possible in linear space~\cite{Alstrup2001Optimal}. The z-fast trie answers 
 such queries within the bounds of predecessor search, and thus not optimally.
 Finally, a few structures provide bounds for predecessor search that depend on the distance $\Delta$ between the query and its nearest neighbor in the set (i.e., the closer of its predecessor and its successor),
 rather than on the length of the keys: Bose \textit{et al.}~\cite{Bose2013Fast} attain $O(\lg\lg\Delta)$ expected time, but not linear space; 
@@ -476,7 +483,7 @@ Cohen \textit{et al.}~\cite{Cohen2015Minimal} use small z-fast tries as a compon
 with a constant number of accesses to the keys.
 
 \paragraph{Binary search on prefix lengths.} The idea of locating the longest prefix of a query that appears in a set of strings by a binary search on its \emph{length}, 
-using hashing to test whether a prefix appears, goes back to x-fast tries~\cite{WilLLWRQ}; it was rediscovered in the context 
+using hashing to test whether a prefix appears, goes back to x-fast tries~\cite{WilLLWRQ} (the ``binary search on the levels'' of a trie on the universe is already in~\cite{vanEmdeBoas1975Preserving}); it was rediscovered in the context 
 of IP routing by Waldvogel \textit{et al.}~\cite{Waldvogel1997Scalable}, who use a hash table for each prefix 
 length.\footnote{The journal version~\cite{Waldvogel2001Scalable} mentions the stratified trees of van Emde Boas~\cite{EKZDIEPQ} as the closest 
 previous work, but not x-fast tries.} 
@@ -567,13 +574,21 @@ grouped into compound nodes of bounded fanout so as to minimize the height), per
 (on $50$ million URLs,~\cite{Binna2022Height} reports a height of $62$ for ART, $44$ for Masstree and $9$ for HOT).
 The Cuckoo Trie~\cite{Zeitak2021Cuckoo} stores the nodes of a trie in a hash table indexed by the string associated with each node, as we do, 
 but descends the trie level by level, prefetching the nodes of the next few levels so that the associated cache misses overlap. 
-B-trees for strings are still based on the \emph{prefix B-trees} of Bayer and Unterauer~\cite{Bayer1977Prefix}, which store 
-only once the prefix common to all keys of a node, and use as separators the shortest strings separating the keys of adjacent
-leaves (see~\cite[Section~3.5]{Graefe2011Modern}): in a recent comparison of seven techniques for compressing the keys of a B-tree, 
+B-trees for strings are still based on the two ideas of the \emph{prefix B-trees} of Bayer and Unterauer~\cite{Bayer1977Prefix}: the 
+separators are the shortest strings separating the keys of adjacent leaves, and the point at which a leaf is split can be moved 
+so as to shorten them; moreover, the prefix common to all the keys that a node may contain, which is determined by the separators 
+delimiting the node in its ancestors, is not stored with the keys (current implementations store it once per 
+node; see~\cite[Section~3.5]{Graefe2011Modern}): in a recent comparison of seven techniques for compressing the keys of a B-tree, 
 the combination of these two is reported to be the fastest, answering point queries from $25$\% to $120$\% faster 
-than a B-tree storing whole keys~\cite{Gao2024Revisiting}. Moreover, a few bytes of each key following the common prefix can be stored in the 
+than a B-tree storing whole keys~\cite{Gao2024Revisiting,Sun2026Evaluation}. Moreover, a few bytes of each key following the common prefix can be stored in the 
 fixed-size entries of a node, so that most comparisons are decided without accessing the key: these are the ``poor man's normalized keys'' 
-of Graefe and Larson~\cite{Graefe2001Btree}, who trace the idea back to cache-conscious sorting. Recent designs for main memory
+of Graefe and Larson~\cite{Graefe2001Btree}, who trace the idea back to cache-conscious sorting; with four bytes per key, they are 
+reported to make a prefix B-tree a further $26$\% faster on point queries on synthetic keys~\cite{Sun2026Evaluation}. 
+The \emph{partial keys} of Bohannon, McIlroy and Rastogi~\cite{Bohannon2001Main} are instead relative to the preceding key of the node: an entry contains 
+a pointer to the key, the position of the first bit (or byte) in which the key differs from the preceding one, and a few of the following bits, 
+and a node is searched accessing at most one key. 
+The B$^2$-tree~\cite{Schmeisser2022B2} embeds in each page a trie on single bytes that restricts the binary search to about $32$ keys. 
+Recent designs for main memory
 add hash-based fingerprints, which speed up point queries~\cite{Muller2025BTrees,Chen2025FB}. 
 Learned indices for strings have been proposed, too~\cite{Wang2020SIndex,Spector2021Bounding,Yang2024LITS,Yang2026Learned}. 
 Hyperion~\cite{Masker2019Hyperion}, a trie designed for space efficiency, has been evaluated on $7.95$ billion $n$-grams with an 
@@ -593,7 +608,7 @@ a plain bisection suffices. As only one string per leaf is indexed, the hash tab
 the same approach can of course be applied to z-fast tries. 
 
 \paragraph{Uses of z-fast tries.} After~\cite{BBPMMPH,Belazzougui2010Fast,BBVDZT}, z-fast tries (in most cases, the static 
-version, often with signatures given by Karp--Rabin fingerprints and a final verification) have been used as a component of several other data structures: 
+version, often with signatures given by Karp--Rabin fingerprints~\cite{Karp1987Efficient} and a final verification) have been used as a component of several other data structures: 
 \begin{itemize}
 \item in text indices based on Lempel--Ziv parsings, grammars, and other forms of dictionary compression, to locate 
 in time logarithmic in the length of a pattern the node of a compacted trie of phrase boundaries associated with each way of splitting the 
@@ -1476,6 +1491,9 @@ length at most $L$ have the same fingerprint with probability at most $2L/2^k$, 
 As for the second property, a fingerprint is extended by one bit with a shift and an exclusive or~\cite{Rabin1981Fingerprinting}, 
 but extending it by a word requires in practice tables~\cite{Broder1993Some} or an instruction multiplying polynomials with 
 coefficients in $\mathbf Z_2$, whereas with polynomials over $\mathbf Z_p$ the multiplication of the RAM model is sufficient.
+The fingerprints of Karp and Rabin~\cite{Karp1987Efficient} are, instead, the residues of the integer represented by the string modulo a prime chosen 
+uniformly at random among those not larger than a given bound; in the literature, however, the name is commonly used for signatures of the kind 
+used here, in which the prime is fixed and the evaluation point is random.
 The cyclic redundancy checks used as signatures by some implementations of similar structures, such as Wormhole~\cite{WNJWormhole}, are 
 fingerprints of the same kind in which the polynomial is fixed and has degree $32$, so no such bound is available; the same is true of the hash functions
 used by our implementations (see Section~\ref{sec:experiments}).
@@ -2079,9 +2097,9 @@ ends at $x^+$, so it requires time $O(\lg |x^+|)$ (in the symmetric case, $O(\lg
 \subsection{Avoiding the computation of the 2-fattest number}
 
 Algorithm~\ref{algo:parex} requires the computation of a 2-fattest number, and thus of $\lambda$ (the index of the highest bit set), at each
-iteration. With multiplication, $\lambda$ can be computed in constant time~\cite{FrWSITBFT}; however, on a RAM providing just additions,
-shifts and bitwise Boolean operations its computation requires time $\Omega(\lg \lg w)$, unless the space used is exponential in
-$w^{1-\epsilon}$~\cite{Brodnik1997Transdichotomous}\todo{This citation is taken from~\cite{Thorup2003AC0}; the paper has not been checked.}.
+iteration. With multiplication, $\lambda$ can be computed in constant time~\cite[Section~5]{FrWSITBFT}; however, on a RAM providing just additions,
+subtractions, shifts and bitwise Boolean operations its computation requires time $\Omega(\lg \lg w)$, even if a precomputed table of
+size $O\bigl(2^{w^{1-\epsilon}}\bigr)$ is available, for any constant $\epsilon>0$~\cite[Theorem~15]{Brodnik1997Transdichotomous}.
 In this section we show how to compute the 2-fattest numbers required by Algorithm~\ref{algo:parex} using
 a single computation of $\lambda$ at the start of the algorithm, or even none: it is sufficient to start from an upper bound
 $s$ on $\lambda(b)+1$ such as the first power of two for which $b\gg s=0$, which can be found by doubling in $O(\lg\lg b)$ steps

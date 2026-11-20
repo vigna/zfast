@@ -283,6 +283,34 @@ the changes are precisions and additions.
 - `sec:rust`: the text says that the B-tree baseline uses none of the
   techniques for strings, and that ART and HOT are not included yet.
 
+## 7b-2. Third batch of primary sources (2026-11-20)
+
+Reports: `related-work/verified-classical.md`, `verified-btrees2.md`.
+
+- The citation of Brodnik, Miltersen and Munro for the cost of the most
+  significant bit without multiplication is now verified (their Theorem 15),
+  and the `\todo` is gone.
+- y-fast tries: Willard proves only worst-case query bounds with static hash
+  tables; the update bounds need dynamic perfect hashing (as stated by
+  Fredman and Willard). The text said "at the price of amortized bounds".
+- Fusion trees: the bound printed in the paper is `O(lg n / lg lg n)`
+  amortized; `O(lg n / lg w)` is the static restatement.
+- The first dictionary with constant time w.h.p. is that of Dietzfelbinger
+  and Meyer auf der Heide (ICALP 1990), which already needs no bound on `n`.
+- van Emde Boas: FOCS 1975 and IPL 1977 are now cited; binary search on the
+  levels is already in the first. Static range reporting in constant time
+  (Alstrup, Brodal, Rauhe).
+- Karp-Rabin fingerprints (random prime, fixed base) are distinguished from
+  the signatures used here in `sec:dict`.
+- Prefix B-trees: the description of what Bayer and Unterauer introduce is
+  corrected (short separators with a movable split point; prefix determined
+  by the bounds of the page and not stored). Partial keys (Bohannon et al.)
+  and the B2-tree are mentioned; the 26% gain of key heads is cited.
+- The LATA 2012 paper of Gagie et al. has been read: it contains no fat
+  binary search, so citing the LATIN 2014 paper is right.
+- `biblio.bib`: journal and year of van Emde Boas, Kaas and Zijlstra; article
+  number of the tabulation paper.
+
 ## 7c. Points left for the authors to decide (kept for later, 2026-11-20)
 
 These are places where the corrected text makes a choice or leaves a tension;
@@ -332,9 +360,6 @@ are correct; the LATIN 2014 paper and zuffix arrays stay in separate items.
   strings is a weak baseline for strings (current B-trees truncate prefixes
   and keep key heads in the nodes); the new Section `sec:rust` compares with
   Wormhole, but the old text has not been changed in this respect.
-- Section 8.1: the citation for the `lg lg w` lower bound on `λ` without
-  multiplication (Brodnik, Miltersen, Munro) is taken from Thorup's paper and
-  has not been checked.
 - Section 10: two `LINK`s (three with the Rust code); rerun the experiments of
   the C implementation (hardware, compiler, space, several runs, wall-clock
   time, uniform shuffle); the section on the Rust implementation is

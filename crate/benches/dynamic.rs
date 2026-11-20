@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
-//! Benchmarks for the dynamic structures (`ZFastSet` and `ZFastTrie`), with
-//! `BTreeSet` as a baseline.
+//! Benchmarks for the dynamic structures (`ZFastPagedSet`, `ZFastSet` and
+//! `ZFastTrie`), with `BTreeSet` as a baseline.
 //!
 //! The number of keys can be set with the environment variable `ZFAST_N`
 //! (default: one million), and the keys with `ZFAST_KEYS`: the name of a file
@@ -24,7 +24,7 @@ use std::collections::BTreeSet;
 use std::hint::black_box;
 use std::ops::Bound::{Included, Unbounded};
 use zfast::utils::Chain;
-use zfast::{KeySeq, PackedKeys, ZFastSet, ZFastTrie};
+use zfast::{KeySeq, PackedKeys, ZFastPagedSet, ZFastSet, ZFastTrie};
 
 /// Benchmarks a query, cycling through the given strings.
 fn query<R>(
@@ -61,18 +61,18 @@ macro_rules! bench {
         query(c, "contains_hit", name, &w.hits, |q| trie.contains(q));
         query(c, "contains_miss", name, &w.misses, |q| trie.contains(q));
         query(c, "pred_hit", name, &w.hits, |q| {
-            trie.pred(q).map(<[u8]>::len)
+            trie.pred(q).map(|k| k.len())
         });
         query(c, "pred_miss", name, &w.misses, |q| {
-            trie.pred(q).map(<[u8]>::len)
+            trie.pred(q).map(|k| k.len())
         });
         query(c, "succ_miss", name, &w.misses, |q| {
-            trie.succ(q).map(<[u8]>::len)
+            trie.succ(q).map(|k| k.len())
         });
         c.benchmark_group("iter")
             .sample_size(10)
             .bench_function(name, |b| {
-                b.iter(|| trie.iter().map(<[u8]>::len).sum::<usize>())
+                b.iter(|| trie.iter().map(|k| k.len()).sum::<usize>())
             });
         // An insertion followed by a deletion, in a trie of constant size
         let mut i = 0;
@@ -165,6 +165,7 @@ fn benches(c: &mut Criterion) {
     let n = std::env::var("ZFAST_N").map_or(1_000_000, |s| s.parse().expect("ZFAST_N"));
     let spec = std::env::var("ZFAST_KEYS").unwrap_or("urls".into());
     let w = Workload::new(&spec, n);
+    bench!(ZFastPagedSet, c, "ZFastPagedSet", &w);
     bench!(ZFastSet, c, "ZFastSet", &w);
     bench!(ZFastSet<Chain>, c, "ZFastSet<Chain>", &w);
     bench!(ZFastTrie, c, "ZFastTrie", &w);

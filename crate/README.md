@@ -20,11 +20,12 @@ uses and implements.
 
 ## The data structures
 
-There are two dynamic structures and a static one:
+There are three dynamic structures and a static one:
 
 | | | |
 |---|---|---|
-| `ZFastSet` | dynamic | a z-fast trie indexing buckets of keys: the structure of choice in practice |
+| `ZFastPagedSet` | dynamic | a z-fast trie indexing segments of pages of keys: the structure of choice for large sets |
+| `ZFastSet` | dynamic | a z-fast trie indexing buckets of keys |
 | `ZFastTrie` | dynamic | the z-fast trie of the paper, with one leaf per key |
 | `StaticZFastTrie` | static | an index over a sorted sequence of keys, possibly sampled |
 
@@ -35,6 +36,41 @@ terminator smaller than all bytes. Signature collisions are handled by
 verifying the result of a search with a single string comparison, and by
 repeating the search exactly in the (extremely unlikely) case of failure;
 answers are always exact.
+
+### `ZFastPagedSet`
+
+A dynamic sorted set of byte strings designed for sets that do not fit the
+cache, where the cost of an operation is the number of cache misses it
+causes, one after the other. Keys are stored, without the prefix they share,
+in pages of four kilobytes; up to 64 consecutive pages form a *segment*, and a
+z-fast trie (the *router*) indexes the segments through short separators.
+The router has thus one leaf every few thousand keys, and fits the cache even
+for sets with billions of keys; moreover, it works on signatures only, and it
+is the segment that verifies the result of its search. A segment contains a
+hash table mapping its keys to their position, so a membership query accesses
+the segment and then the key; and a blind directory of its pages in the style
+of string B-trees, taking four bytes per page, so an order query accesses the
+segment, usually one page, and a key. The lines that will be accessed in a
+segment or in a page are known as soon as the segment or the page is, so they
+are fetched at the same time. On Linux, the memory is backed by huge pages.
+
+Since keys are stored without a prefix, methods return keys as pairs of
+slices (`PagedKey`).
+
+```rust
+use zfast::ZFastPagedSet;
+
+let mut set = <ZFastPagedSet>::new();
+set.insert("foo");
+set.insert("bar");
+set.insert("foobar");
+
+assert!(set.contains("bar"));
+assert_eq!(set.succ("c").unwrap().to_vec(), b"foo");
+assert_eq!(set.pred("c").unwrap().to_vec(), b"bar");
+assert!(set.remove("foo"));
+assert_eq!(set.iter().count(), 2);
+```
 
 ### `ZFastSet`
 
@@ -145,7 +181,7 @@ Besides unit tests and documentation tests, the directory `tests` contains
 differential tests against naive implementations on adversarial sets of keys:
 the tests of the dynamic structures check all invariants (names, extents,
 handles, signatures, jump pointers, the list of leaves, the content of
-buckets) after every update, and all structures are tested also with
+buckets, pages and segments) after every update, and all structures are tested also with
 signatures of a few bits, so that false positives and duplicate signatures are
 common.
 

@@ -33,6 +33,14 @@ significant bit without multiplication, is known only through Thorup's paper.
 
 ## 2. Classical papers cited from the literature, never read for this work
 
+**Done (2026-11-20):** all the papers of this section have been read; see
+`verified-classical.md`. Of section 3, also Graefe 2024, Bohannon et al., the
+B2-tree (journal version), Sun et al., the VLDB Journal HAT-trie, the LATA
+2012 paper, Yu et al., Golan and Porat, Orlandi and Venturini have been read
+(`verified-btrees2.md`). New leads from these readings, not downloaded:
+Ferguson, *Bit trees* (CACM 1992); Bumbulis and Bowman (SIGMOD 2002); Lomet,
+*The evolution of effective B-tree page organization* (SIGMOD Record 2001).
+
 van Emde Boas (FOCS 1975, 10.1109/SFCS.1975.26; IPL 1977,
 10.1016/0020-0190(77)90031-X); van Emde Boas, Kaas, Zijlstra
 (10.1007/BF01683268); Willard, x-fast and y-fast tries (IPL 17(2), 1983,
