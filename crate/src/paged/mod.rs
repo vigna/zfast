@@ -345,6 +345,20 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
         )
     }
 
+    /// Returns the lower fences of the segments, in order (for profiling:
+    /// they are the set of strings indexed by the router).
+    #[doc(hidden)]
+    pub fn fences(&self) -> impl Iterator<Item = &[u8]> + '_ {
+        let mut id = FIRST;
+        std::iter::from_fn(move || {
+            (id != NONE).then(|| {
+                let seg = self.segs.get(id);
+                id = seg.next;
+                seg.low()
+            })
+        })
+    }
+
     /// Returns the first candidate segment that the router proposes for `x`,
     /// without accessing any segment (for profiling).
     #[doc(hidden)]

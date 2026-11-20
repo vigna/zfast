@@ -32,7 +32,8 @@ build_gcc() {
 # —————————— Install CLang ——————————
 
 # Wormhole is fastest when compiled with clang, and the B-tree of btree-cpp
-# needs it, so we build it, too (a release, rather than the current sources).
+# needs it, so we build it, too (a release, rather than the current sources),
+# together with lld, which is necessary for link-time optimization.
 
 export LLVMVER=23.1.6
 
@@ -42,7 +43,7 @@ build_clang() {
 	cd llvm-project
 	mkdir build
 	cd build
-	cmake -DLLVM_ENABLE_PROJECTS=clang -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=host -G Ninja ../llvm
+	cmake -DLLVM_ENABLE_PROJECTS="clang;lld" -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=host -G Ninja ../llvm
 	ninja
 	sudo ninja install
 	cd

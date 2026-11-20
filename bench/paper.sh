@@ -26,6 +26,11 @@
 # pages explicitly):
 #
 #   echo always | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
+#
+# All structures are run with jemalloc in place of the allocator of the C
+# library, as all those that allocate memory piecewise are faster with it
+# (some by 20%); set JEMALLOC to the path of the library if it is not the
+# one below, or to the empty string to use the allocator of the C library.
 
 set -e
 if [ $# -lt 1 ]; then
@@ -47,10 +52,11 @@ ln -sf "$URLS" data/eu-2015
 # shuffling it in memory
 export ZFAST_PRESHUFFLED=1
 Q=10000000
+JEMALLOC=${JEMALLOC-/usr/lib64/libjemalloc.so.2}
 
 run() {
-	python3 run.py bench --no-build --method "$1" --dataset eu-2015 --n "$2" --queries $Q \
-		--pin "taskset -c $3" > "paper-$1-$2.log" 2>&1
+	python3 run.py bench --no-build ${JEMALLOC:+--preload "$JEMALLOC"} --method "$1" \
+		--dataset eu-2015 --n "$2" --queries $Q --pin "taskset -c $3" > "paper-$1-$2.log" 2>&1
 }
 
 # Runs the given methods on a workload of the given size, two at a time
@@ -68,12 +74,12 @@ pairs() {
 	done
 }
 
-ALL="ZFastPagedSet Wormhole AdaptiveBTree HOT ZFastSet ZFastTrie ART BTreeSet
+ALL="ZFastPagedSet Wormhole Wormhole256 AdaptiveBTree HOT ZFastSet ZFastTrie ART BTreeSet
 	StaticZFastTrie StaticZFastTrie16 StaticZFastTrie16Ef BinarySearch"
 # Half of the strings are inserted
 pairs 10000000 $ALL
 pairs 100000000 $ALL
-pairs 1000000000 ZFastPagedSet Wormhole AdaptiveBTree HOT StaticZFastTrie16 BinarySearch \
-	StaticZFastTrie16Ef StaticZFastTrie ZFastSet BTreeSet
+pairs 1000000000 ZFastPagedSet Wormhole256 Wormhole AdaptiveBTree HOT StaticZFastTrie16 \
+	BinarySearch StaticZFastTrie16Ef ZFastSet BTreeSet
 
 python3 run.py report --dataset eu-2015.q$Q

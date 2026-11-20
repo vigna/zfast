@@ -352,8 +352,46 @@ fn run_bsearch(r: &Runner, keys: &PackedKeys, hits: &PackedKeys, misses: &Packed
     r.time("succ-miss", r.reps, misses, succ);
 }
 
+/// Writes a workload whose keys are the fences of the segments of a
+/// [`ZFastPagedSet`] built on the keys of another workload, in random order,
+/// and whose queries are those of the other workload: running a structure on
+/// it measures how fast the structure would be as the top level of the set.
+fn fences(prefix: &str, out: &str) -> std::io::Result<()> {
+    let keys = read(&format!("{prefix}.keys"));
+    let mut set = <ZFastPagedSet>::new();
+    for key in keys.iter() {
+        set.insert(key);
+    }
+    // The first fence is the empty string, which some structures do not support
+    let mut fences: Vec<&[u8]> = set.fences().filter(|f| !f.is_empty()).collect();
+    let mut state = 0x9E37_79B9_7F4A_7C15_u64;
+    for i in (1..fences.len()).rev() {
+        state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        fences.swap(i, ((z ^ (z >> 31)) % (i as u64 + 1)) as usize);
+    }
+    let mut file = std::io::BufWriter::new(std::fs::File::create(format!("{out}.keys"))?);
+    for fence in &fences {
+        file.write_all(&(fence.len() as u32).to_le_bytes())?;
+        file.write_all(fence)?;
+    }
+    file.flush()?;
+    for ext in ["hits", "misses"] {
+        std::fs::copy(format!("{prefix}.{ext}"), format!("{out}.{ext}"))?;
+    }
+    eprintln!(
+        "{} fences, {:.1} bytes on average",
+        fences.len(),
+        fences.iter().map(|f| f.len()).sum::<usize>() as f64 / fences.len() as f64
+    );
+    Ok(())
+}
+
 fn usage() -> ! {
     eprintln!("Usage: zfast-bench gen KEYS N PREFIX [QUERIES]");
+    eprintln!("       zfast-bench fences PREFIX OUT");
     eprintln!("       zfast-bench run METHOD PREFIX REPS");
     eprintln!(
         "Methods: zpaged, zset, zft, zft-chain, btree, bsearch, szft:RATIO, szft-ef:RATIO, szft-chain:RATIO"
@@ -379,6 +417,9 @@ fn main() {
                 w.keys.len(),
                 w.misses.len()
             );
+        }
+        Some("fences") if args.len() == 4 => {
+            fences(&args[2], &args[3]).expect("cannot write workload");
         }
         Some("run") if args.len() == 5 => {
             let reps: usize = args[4].parse().unwrap_or_else(|_| usage());
