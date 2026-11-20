@@ -7,6 +7,12 @@
 - `ZFastTrie`, a dynamic z-fast trie on byte strings with insertions,
   deletions, membership, predecessor and successor queries, and iteration.
 
+- `ZFastPagedSet`, a dynamic sorted set of byte strings for large sets:
+  keys are stored without their common prefix in pages of four kilobytes,
+  grouped in segments that are the leaves of a z-fast trie working on
+  signatures only; a segment contains a hash table for membership queries
+  and a blind directory of its pages for order queries.
+
 - `ZFastSet`, a dynamic sorted set of byte strings made of buckets of keys
   indexed by a `ZFastTrie`.
 

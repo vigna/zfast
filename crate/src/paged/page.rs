@@ -191,7 +191,9 @@ impl Page {
         let ptr = usize::from_le_bytes(b[8..16].try_into().unwrap());
         // SAFETY: the pointer and the length were obtained from a boxed
         // slice that is owned by the page
-        unsafe { std::slice::from_raw_parts(ptr as *const u8, len as usize) }
+        unsafe {
+            std::slice::from_raw_parts(std::ptr::with_exposed_provenance::<u8>(ptr), len as usize)
+        }
     }
 
     /// Returns the number of bytes of the heap occupied by a blob.
@@ -241,7 +243,8 @@ impl Page {
             b[BLOB_HEADER..size].copy_from_slice(bytes);
         } else {
             assert!(bytes.len() <= u32::MAX as usize, "key too long");
-            let ptr = Box::into_raw(bytes.to_vec().into_boxed_slice()) as *mut u8 as usize;
+            let ptr =
+                (Box::into_raw(bytes.to_vec().into_boxed_slice()) as *mut u8).expose_provenance();
             b[..2].copy_from_slice(&OVERFLOW.to_le_bytes());
             b[4..8].copy_from_slice(&(bytes.len() as u32).to_le_bytes());
             b[8..16].copy_from_slice(&ptr.to_le_bytes());
@@ -259,7 +262,7 @@ impl Page {
             // SAFETY: see `overflow`; the blob is not used any longer
             unsafe {
                 drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(
-                    ptr as *mut u8,
+                    std::ptr::with_exposed_provenance_mut::<u8>(ptr),
                     len as usize,
                 )));
             }
@@ -362,14 +365,19 @@ impl Page {
         }
     }
 
-    /// Prefetches the lines accessed by a binary search.
+    /// Prefetches the lines accessed by a binary search (assuming that the
+    /// page contains a typical number of keys) and, if `low` is true, those
+    /// accessed when comparing a string with the separator.
     #[inline(always)]
-    pub(super) fn prefetch_slots(&self) {
+    pub(super) fn prefetch_slots(&self, low: bool) {
         let base = self as *const Page as *const u8;
-        for i in 1..9 {
+        for i in 0..8 {
             prefetch(base.wrapping_add(64 * i));
         }
-        self.prefetch_low();
+        if low {
+            prefetch(base.wrapping_add(PAGE_SIZE - 64));
+            prefetch(base.wrapping_add(PAGE_SIZE - 128));
+        }
     }
 
     /// Returns true if the key whose blob has the given offset is `x`.

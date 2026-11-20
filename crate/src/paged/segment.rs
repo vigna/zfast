@@ -85,7 +85,12 @@ impl Fence {
             let ptr = usize::from_le_bytes(self.data[..8].try_into().unwrap());
             // SAFETY: the pointer was obtained from a boxed slice of the
             // given length, owned by the fence
-            Some(unsafe { std::slice::from_raw_parts(ptr as *const u8, self.len as usize) })
+            Some(unsafe {
+                std::slice::from_raw_parts(
+                    std::ptr::with_exposed_provenance::<u8>(ptr),
+                    self.len as usize,
+                )
+            })
         }
     }
 
@@ -95,7 +100,7 @@ impl Fence {
             // SAFETY: see get; the string is not used any longer
             unsafe {
                 drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(
-                    ptr as *mut u8,
+                    std::ptr::with_exposed_provenance_mut::<u8>(ptr),
                     self.len as usize,
                 )));
             }
@@ -110,7 +115,7 @@ impl Fence {
         if s.len() <= FENCE_INLINE {
             self.data[..s.len()].copy_from_slice(s);
         } else {
-            let ptr = Box::into_raw(s.to_vec().into_boxed_slice()) as *mut u8 as usize;
+            let ptr = (Box::into_raw(s.to_vec().into_boxed_slice()) as *mut u8).expose_provenance();
             self.data[..8].copy_from_slice(&ptr.to_le_bytes());
         }
         self.len = s.len() as u32;

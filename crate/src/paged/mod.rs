@@ -501,12 +501,12 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
     #[inline(always)]
     fn page_of(&self, seg: &Segment, x: &[u8]) -> usize {
         let from = seg.candidate(x);
-        self.pages.get(seg.page(from)).prefetch_slots();
+        self.pages.get(seg.page(from)).prefetch_slots(true);
         // When the candidate is not the right page, usually that is
         // because x diverges from the separator of the candidate in the
         // part that the directory does not know, and it is smaller
         if from > 0 {
-            self.pages.get(seg.page(from - 1)).prefetch_slots();
+            self.pages.get(seg.page(from - 1)).prefetch_slots(false);
         }
         seg.locate(x, from, &self.pages)
     }
