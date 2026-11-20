@@ -389,8 +389,82 @@ fn fences(prefix: &str, out: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Writes a workload reading distinct keys in random order from standard
+/// input, one per line, without keeping them in memory: the first `n` lines
+/// are the keys, the following `queries` lines are the strings that are not
+/// keys, and the successful queries are a random sample of `queries` keys in
+/// random order (as in `gen`, which however needs several times the size of
+/// the keys in memory).
+fn stream(n: usize, queries: usize, prefix: &str) -> std::io::Result<()> {
+    use std::io::BufRead;
+    fn record(out: &mut impl Write, key: &[u8]) -> std::io::Result<()> {
+        out.write_all(&(key.len() as u32).to_le_bytes())?;
+        out.write_all(key)
+    }
+    let create = |ext: &str| {
+        std::fs::File::create(format!("{prefix}.{ext}"))
+            .map(|f| std::io::BufWriter::with_capacity(1 << 20, f))
+    };
+    let mut state = 0x9E37_79B9_7F4A_7C15_u64;
+    let mut next = |bound: u64| {
+        state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        (((z ^ (z >> 31)) as u128 * bound as u128) >> 64) as usize
+    };
+    let stdin = std::io::stdin();
+    let mut input = std::io::BufReader::with_capacity(1 << 20, stdin.lock());
+    let mut line = Vec::new();
+    let mut read = |line: &mut Vec<u8>| -> std::io::Result<bool> {
+        line.clear();
+        if input.read_until(b'\n', line)? == 0 {
+            return Ok(false);
+        }
+        if line.last() == Some(&b'\n') {
+            line.pop();
+        }
+        Ok(true)
+    };
+    // The successful queries are chosen by reservoir sampling
+    let mut sample: Vec<Box<[u8]>> = Vec::with_capacity(queries);
+    let mut keys = create("keys")?;
+    let mut num_keys = 0;
+    while num_keys < n && read(&mut line)? {
+        record(&mut keys, &line)?;
+        if sample.len() < queries {
+            sample.push(line.as_slice().into());
+        } else {
+            let i = next(num_keys as u64 + 1);
+            if i < queries {
+                sample[i] = line.as_slice().into();
+            }
+        }
+        num_keys += 1;
+    }
+    keys.flush()?;
+    let mut misses = create("misses")?;
+    let mut num_misses = 0;
+    while num_misses < queries && read(&mut line)? {
+        record(&mut misses, &line)?;
+        num_misses += 1;
+    }
+    misses.flush()?;
+    for i in (1..sample.len()).rev() {
+        sample.swap(i, next(i as u64 + 1));
+    }
+    let mut hits = create("hits")?;
+    for key in sample.iter().take(num_misses) {
+        record(&mut hits, key)?;
+    }
+    hits.flush()?;
+    eprintln!("{num_keys} keys, {num_misses} unsuccessful queries");
+    Ok(())
+}
+
 fn usage() -> ! {
     eprintln!("Usage: zfast-bench gen KEYS N PREFIX [QUERIES]");
+    eprintln!("       zfast-bench stream N QUERIES PREFIX < KEYS");
     eprintln!("       zfast-bench fences PREFIX OUT");
     eprintln!("       zfast-bench run METHOD PREFIX REPS");
     eprintln!(
@@ -417,6 +491,11 @@ fn main() {
                 w.keys.len(),
                 w.misses.len()
             );
+        }
+        Some("stream") if args.len() == 5 => {
+            let n: usize = args[2].parse().unwrap_or_else(|_| usage());
+            let queries: usize = args[3].parse().unwrap_or_else(|_| usage());
+            stream(n, queries, &args[4]).expect("cannot write workload");
         }
         Some("fences") if args.len() == 4 => {
             fences(&args[2], &args[3]).expect("cannot write workload");
