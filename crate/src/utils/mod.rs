@@ -99,6 +99,76 @@ pub(crate) const AHEAD: usize = match option_env!("ZFAST_AHEAD") {
     None => 2,
 };
 
+/// The number of levels of the probe tree that are hashed and prefetched at
+/// the start of each round of a [fat binary search](fat_binary_search), or
+/// zero to hash and prefetch just the next [`AHEAD`] probes that will be
+/// performed if the current ones are unsuccessful.
+pub(crate) const LEVELS: usize = match option_env!("ZFAST_LEVELS") {
+    Some(s) => parse_usize(s),
+    None => 0,
+};
+
+/// Performs a fat binary search on the interval (`a`..`b`] in rounds: at the
+/// start of each round, the probes in the first [`LEVELS`] levels of the probe
+/// tree of the current interval are hashed and passed to `prefetch`; the
+/// search then goes on as long as it uses those probes.
+///
+/// All the probes that a search can perform lie on a binary tree that depends
+/// only on the interval, and the search descends along one of its branches,
+/// possibly skipping levels: thus, a round advances by at least [`LEVELS`]
+/// levels.
+#[inline(always)]
+fn fat_binary_search_rounds(
+    hasher: &impl PrefixHasher,
+    mut a: usize,
+    mut b: usize,
+    prefetch: impl Fn(u64),
+    mut probe: impl FnMut(usize, u64) -> Option<usize>,
+) {
+    const MAX: usize = (1 << LEVELS) - 1;
+    let mut probes = [(0, 0); MAX];
+    while a < b {
+        // The intervals whose 2-fattest number has still to be hashed, with
+        // their depth
+        let mut stack = [(0, 0, 0); LEVELS + 1];
+        let (mut n, mut top) = (0, 1);
+        stack[0] = (a, b, 1);
+        while top > 0 {
+            top -= 1;
+            let (l, r, depth) = stack[top];
+            let f = two_fattest(l, r);
+            let h = hasher.hash(f);
+            prefetch(h);
+            probes[n] = (f, h);
+            n += 1;
+            if depth < LEVELS {
+                // The interval of unsuccessful probes is examined first
+                if f < r {
+                    stack[top] = (f, r, depth + 1);
+                    top += 1;
+                }
+                if l < f - 1 {
+                    stack[top] = (l, f - 1, depth + 1);
+                    top += 1;
+                }
+            }
+        }
+        while a < b {
+            let f = two_fattest(a, b);
+            let Some(&(_, h)) = probes[..n].iter().find(|&&(g, _)| g == f) else {
+                break;
+            };
+            match probe(f, h) {
+                Some(extent) => {
+                    debug_assert!(extent >= f);
+                    a = extent;
+                }
+                None => b = f - 1,
+            }
+        }
+    }
+}
+
 /// Performs a fat binary search on the interval (`a`..`b`].
 ///
 /// At each step, the hash `h` of the prefix whose length `f` is the
@@ -122,6 +192,9 @@ pub(crate) fn fat_binary_search(
     prefetch: impl Fn(u64),
     mut probe: impl FnMut(usize, u64) -> Option<usize>,
 ) {
+    if LEVELS > 0 {
+        return fat_binary_search_rounds(hasher, a, b, prefetch, probe);
+    }
     // The probes that will be performed, in order, if they are all
     // unsuccessful
     let mut pending = [(0, 0); AHEAD + 1];

@@ -321,3 +321,23 @@ work.
 - Wormhole with 64 keys per leaf crashes.
 - The successor of ART is measured through a scan (see above).
 - The memory of the B-tree depends on the allocator (see above).
+
+## 6. Fat binary search in rounds
+
+The paper (Section "Fat binary search in rounds") proves that the probes of a
+search lie on a tree that depends only on the length of the query, so the top
+*s* levels can be hashed and prefetched at once. The crate implements this as
+the compile-time option `ZFAST_LEVELS` (default 0: the sliding window on the
+failure branch). At 50 million keys, successful / unsuccessful membership:
+
+| levels | `ZFastTrie` | `ZFastSet` | `ZFastPagedSet` (router) |
+|---|---|---|---|
+| 0 (default) | 869 / 776 | 922 / 640 | 461 / 280 (122) |
+| 2 | 875 / 802 | 947 / 664 | 473 / 292 (131) |
+| 4 | 812 / 743 | 1006 / 716 | 518 / 337 (182) |
+
+Full speculation with four levels (15 probes per round) makes the pure trie,
+whose z-map is out of the cache, 4-7% faster; it makes the two structures with
+a small z-map slower, as expected, because the extra hashes buy nothing. The
+run with three levels shared a core with another benchmark and is not valid:
+it must be repeated. Not yet measured at 500 million keys.
