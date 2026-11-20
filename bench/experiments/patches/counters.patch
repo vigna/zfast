@@ -1,0 +1,67 @@
+diff -ruN a/crate/src/utils/mod.rs b/crate/src/utils/mod.rs
+--- a/crate/src/utils/mod.rs	2026-11-20 16:28:57.131554282 +0100
++++ b/crate/src/utils/mod.rs	2026-11-20 17:21:30.162103490 +0100
+@@ -114,6 +114,10 @@
+ /// common: thus, we hash the next [`AHEAD`] probes of that sequence, and pass
+ /// each hash to `prefetch`, before performing a probe. The speculation is
+ /// discarded after a successful probe.
++/// EXPERIMENT: hashes, probes, hits, searches, total length of the interval.
++pub static COUNTS: [std::sync::atomic::AtomicUsize; 5] =
++    [const { std::sync::atomic::AtomicUsize::new(0) }; 5];
++
+ #[inline(always)]
+ pub(crate) fn fat_binary_search(
+     hasher: &impl PrefixHasher,
+@@ -122,6 +126,8 @@
+     prefetch: impl Fn(u64),
+     mut probe: impl FnMut(usize, u64) -> Option<usize>,
+ ) {
++    COUNTS[3].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++    COUNTS[4].fetch_add(b - a, std::sync::atomic::Ordering::Relaxed);
+     // The probes that will be performed, in order, if they are all
+     // unsuccessful
+     let mut pending = [(0, 0); AHEAD + 1];
+@@ -132,6 +138,7 @@
+         while len <= AHEAD && a < spec_b {
+             let f = two_fattest(a, spec_b);
+             let h = hasher.hash(f);
++            COUNTS[0].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+             prefetch(h);
+             pending[len] = (f, h);
+             len += 1;
+@@ -147,8 +154,10 @@
+             pending[i] = pending[i + 1];
+         }
+         len -= 1;
++        COUNTS[1].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+         match probe(f, h) {
+             Some(extent) => {
++                COUNTS[2].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                 debug_assert!(extent >= f);
+                 a = extent;
+                 len = 0;
+diff -ruN a/bench/zfast-bench/src/main.rs b/bench/zfast-bench/src/main.rs
+--- a/bench/zfast-bench/src/main.rs	2026-11-20 16:53:15.428160740 +0100
++++ b/bench/zfast-bench/src/main.rs	2026-11-20 17:21:30.162376409 +0100
+@@ -215,6 +215,21 @@
+     }
+     if std::env::var("ZFAST_STATS").is_ok() {
+         // The cost of the router alone, and of finding the page
++        let c = || {
++            zfast::utils::COUNTS
++                .each_ref()
++                .map(|c| c.swap(0, std::sync::atomic::Ordering::Relaxed))
++        };
++        c();
++        r.time("route-hit", 1, hits, |k| set.route(k) as usize);
++        let [h, p, t, n, l] = c().map(|x| x as f64);
++        eprintln!(
++            "per search: {:.2} hashes, {:.2} probes, {:.2} hits, interval {:.1}",
++            h / n,
++            p / n,
++            t / n,
++            l / n
++        );
+         r.time("route-hit", r.reps, hits, |k| set.route(k) as usize);
+         r.time("route-miss", r.reps, misses, |k| set.route(k) as usize);
+         r.time("page-hit", r.reps, hits, |k| set.page_stats(k).0 as usize);

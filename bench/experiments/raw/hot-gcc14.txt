@@ -1,0 +1,7 @@
+RESULT method=hot-gcc14 op=insert n=50000000 ns=931.7 checksum=50000000
+SPACE method=hot-gcc14 n=50000000 bytes_per_key=0.0 rss_per_key=110.5
+RESULT method=hot-gcc14 op=contains-hit n=10000000 ns=684.5 checksum=10000000
+RESULT method=hot-gcc14 op=contains-miss n=10000000 ns=637.6 checksum=0
+RESULT method=hot-gcc14 op=succ-hit n=10000000 ns=841.0 checksum=753602432
+RESULT method=hot-gcc14 op=succ-miss n=10000000 ns=899.0 checksum=753820228
+RESULT method=hot-gcc14 op=iterate n=50000000 ns=59.1 checksum=3768378730

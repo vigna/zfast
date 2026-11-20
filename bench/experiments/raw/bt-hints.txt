@@ -1,0 +1,8 @@
+RESULT method=hints op=insert n=50000000 ns=959.0 checksum=50000000
+SPACE method=hints n=50000000 bytes_per_key=0.0 rss_per_key=95.4
+RESULT method=hints op=contains-hit n=10000000 ns=1057.6 checksum=10000000
+RESULT method=hints op=contains-miss n=10000000 ns=1049.2 checksum=0
+RESULT method=hints op=succ-hit n=10000000 ns=1067.7 checksum=753602432
+RESULT method=hints op=succ-miss n=10000000 ns=1099.9 checksum=753820228
+RESULT method=hints op=iterate n=50000000 ns=19.4 checksum=3768378730
+RESULT method=hints op=remove n=10000000 ns=1269.1 checksum=10000000

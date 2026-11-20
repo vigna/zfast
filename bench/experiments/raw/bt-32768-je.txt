@@ -1,0 +1,8 @@
+RESULT method=adapt2-32768 op=insert n=50000000 ns=593.7 checksum=50000000
+SPACE method=adapt2-32768 n=50000000 bytes_per_key=0.0 rss_per_key=110.1
+RESULT method=adapt2-32768 op=contains-hit n=10000000 ns=765.9 checksum=10000000
+RESULT method=adapt2-32768 op=contains-miss n=10000000 ns=557.4 checksum=0
+RESULT method=adapt2-32768 op=succ-hit n=10000000 ns=1001.6 checksum=753602432
+RESULT method=adapt2-32768 op=succ-miss n=10000000 ns=1025.2 checksum=753820228
+RESULT method=adapt2-32768 op=iterate n=50000000 ns=7.0 checksum=3768378730
+RESULT method=adapt2-32768 op=remove n=10000000 ns=1243.9 checksum=10000000

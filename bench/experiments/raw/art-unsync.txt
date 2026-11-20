@@ -1,0 +1,5 @@
+RESULT method=art-unsync op=insert n=50000000 ns=1215.6 checksum=50000000
+SPACE method=art-unsync n=50000000 bytes_per_key=0.0 rss_per_key=137.4
+RESULT method=art-unsync op=contains-hit n=10000000 ns=1431.8 checksum=10000000
+RESULT method=art-unsync op=contains-miss n=10000000 ns=1268.2 checksum=0
+RESULT method=art-unsync op=remove n=10000000 ns=1639.5 checksum=10000000

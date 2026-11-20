@@ -1,0 +1,8 @@
+RESULT method=baseline op=insert n=50000000 ns=1157.6 checksum=50000000
+SPACE method=baseline n=50000000 bytes_per_key=0.0 rss_per_key=128.0
+RESULT method=baseline op=contains-hit n=10000000 ns=1303.5 checksum=10000000
+RESULT method=baseline op=contains-miss n=10000000 ns=1331.7 checksum=0
+RESULT method=baseline op=succ-hit n=10000000 ns=1324.2 checksum=753602432
+RESULT method=baseline op=succ-miss n=10000000 ns=1372.6 checksum=753820228
+RESULT method=baseline op=iterate n=50000000 ns=23.8 checksum=3768378730
+RESULT method=baseline op=remove n=10000000 ns=1445.4 checksum=10000000

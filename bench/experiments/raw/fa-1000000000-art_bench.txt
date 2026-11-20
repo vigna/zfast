@@ -1,0 +1,8 @@
+RESULT method=art op=insert n=130328 ns=149.5 checksum=130328
+SPACE method=art n=130328 bytes_per_key=0.0 rss_per_key=114.3
+RESULT method=art op=contains-hit n=10000000 ns=106.8 checksum=97
+RESULT method=art op=contains-miss n=10000000 ns=107.6 checksum=24
+RESULT method=art op=succ-hit n=10000000 ns=826.5 checksum=493824775
+RESULT method=art op=succ-miss n=10000000 ns=823.0 checksum=493762263
+RESULT method=art op=iterate n=130328 ns=18.9 checksum=6556398
+RESULT method=art op=remove n=10000000 ns=108.6 checksum=97

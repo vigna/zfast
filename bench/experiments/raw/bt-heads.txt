@@ -1,0 +1,8 @@
+RESULT method=heads op=insert n=50000000 ns=945.3 checksum=50000000
+SPACE method=heads n=50000000 bytes_per_key=0.0 rss_per_key=94.0
+RESULT method=heads op=contains-hit n=10000000 ns=1090.1 checksum=10000000
+RESULT method=heads op=contains-miss n=10000000 ns=1083.8 checksum=0
+RESULT method=heads op=succ-hit n=10000000 ns=1093.1 checksum=753602432
+RESULT method=heads op=succ-miss n=10000000 ns=1125.4 checksum=753820228
+RESULT method=heads op=iterate n=50000000 ns=19.5 checksum=3768378730
+RESULT method=heads op=remove n=10000000 ns=1248.1 checksum=10000000

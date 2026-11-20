@@ -1,0 +1,9 @@
+RESULT method=zpaged op=insert n=50000000 ns=837.2 checksum=50000000
+SPACE method=zpaged n=50000000 bytes_per_key=97.3 rss_per_key=97.2
+13725 segments, 78.2 pages per segment, 46.6 keys per page, router: 74.9 bytes per segment
+RESULT method=zpaged op=contains-hit n=10000000 ns=455.8 checksum=10000000
+RESULT method=zpaged op=contains-miss n=10000000 ns=276.9 checksum=0
+RESULT method=zpaged op=succ-hit n=10000000 ns=478.5 checksum=753602432
+RESULT method=zpaged op=succ-miss n=10000000 ns=757.1 checksum=753820228
+RESULT method=zpaged op=iterate n=50000000 ns=9.6 checksum=3768378730
+RESULT method=zpaged op=remove n=10000000 ns=564.1 checksum=10000000

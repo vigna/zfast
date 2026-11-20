@@ -1,0 +1,2 @@
+13724 fences, 41.5 bytes on average
+130328 fences, 50.3 bytes on average

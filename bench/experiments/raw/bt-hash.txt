@@ -1,0 +1,8 @@
+RESULT method=hash op=insert n=50000000 ns=744.2 checksum=50000000
+SPACE method=hash n=50000000 bytes_per_key=0.0 rss_per_key=90.2
+RESULT method=hash op=contains-hit n=10000000 ns=979.4 checksum=10000000
+RESULT method=hash op=contains-miss n=10000000 ns=763.2 checksum=0
+RESULT method=hash op=succ-hit n=10000000 ns=1166.3 checksum=753602432
+RESULT method=hash op=succ-miss n=10000000 ns=1210.1 checksum=753820228
+RESULT method=hash op=iterate n=50000000 ns=19.5 checksum=3768378730
+RESULT method=hash op=remove n=10000000 ns=1117.3 checksum=10000000

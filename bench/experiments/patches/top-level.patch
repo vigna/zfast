@@ -1,0 +1,275 @@
+diff -ruN a/crate/src/paged/mod.rs b/crate/src/paged/mod.rs
+--- a/crate/src/paged/mod.rs	2026-11-20 16:53:15.427935660 +0100
++++ b/crate/src/paged/mod.rs	2026-11-20 17:13:51.519849342 +0100
+@@ -191,6 +191,10 @@
+     pages: Slab<Page>,
+     segs: Slab<Segment>,
+     router: Router<H>,
++    /// EXPERIMENT: the lower fences of the segments (except the first one).
++    top: std::collections::BTreeMap<Box<[u8]>, u32>,
++    /// EXPERIMENT: whether to use `top` instead of the router.
++    btree_top: bool,
+     /// A page used when splitting and merging.
+     scratch: Box<Page>,
+     /// The last segment.
+@@ -244,6 +248,8 @@
+             pages,
+             segs,
+             router: Router::new(sig_bits),
++            top: Default::default(),
++            btree_top: std::env::var("ZFAST_BTREE_TOP").is_ok(),
+             scratch: Page::new_boxed(),
+             last: first,
+             len: 0,
+@@ -308,6 +314,11 @@
+     /// `prefetch` on the candidates proposed by the router.
+     #[inline(always)]
+     fn segment(&self, x: &[u8], hasher: &H::Hasher<'_>, prefetch: impl Fn(&Segment)) -> u32 {
++        if self.btree_top {
++            let id = self.top_segment(x);
++            prefetch(self.segs.get(id));
++            return id;
++        }
+         let candidates = self.router.candidates(x, hasher);
+         let candidates = candidates.as_slice();
+         for &id in candidates {
+@@ -321,6 +332,16 @@
+         self.segment_slow(x)
+     }
+ 
++    /// EXPERIMENT: the segment containing `x`, using the B-tree.
++    #[inline(always)]
++    fn top_segment(&self, x: &[u8]) -> u32 {
++        use std::ops::Bound::{Included, Unbounded};
++        self.top
++            .range::<[u8], _>((Unbounded, Included(x)))
++            .next_back()
++            .map_or(FIRST, |(_, &id)| id)
++    }
++
+     #[cold]
+     #[inline(never)]
+     fn segment_slow(&self, x: &[u8]) -> u32 {
+@@ -365,9 +386,20 @@
+     #[inline]
+     pub fn route(&self, x: impl AsRef<[u8]>) -> u32 {
+         let x = x.as_ref();
++        if self.btree_top {
++            return self.top_segment(x);
++        }
+         self.router.candidates(x, &self.router.hasher(x)).as_slice()[0]
+     }
+ 
++    /// EXPERIMENT
++    #[doc(hidden)]
++    #[inline]
++    pub fn route_top(&self, x: impl AsRef<[u8]>) -> u32 {
++        let x = x.as_ref();
++        self.router.top(x, &self.router.hasher(x))
++    }
++
+     /// Returns the segment containing `x`, and whether the first page
+     /// examined by an order query is the right one (for profiling).
+     #[doc(hidden)]
+@@ -408,6 +440,12 @@
+         tag: u32,
+         prefetch: impl Fn(&Segment),
+     ) -> (u32, Option<(usize, u16)>) {
++        if self.btree_top {
++            let id = self.top_segment(x);
++            let seg = self.segs.get(id);
++            prefetch(seg);
++            return (id, self.probe(seg, x, home, tag));
++        }
+         let candidates = self.router.candidates(x, hasher);
+         let candidates = candidates.as_slice();
+         for &id in candidates {
+@@ -801,6 +839,7 @@
+             self.segs.get_mut(next).prev = new;
+         }
+         self.router.insert(new, id, next, &self.segs);
++        self.top.insert(self.segs.get(new).low().into(), new);
+         new
+     }
+ 
+@@ -901,6 +940,7 @@
+         let keys = self.keys_of(id, 0..1);
+         let next = seg.next;
+         self.router.remove(id, next, &self.segs);
++        self.top.remove(self.segs.get(id).low());
+         let (before, seg) = self.segs.pair_mut(prev, id);
+         let page = seg.page(0);
+         let n = before.npages();
+diff -ruN a/crate/src/paged/router.rs b/crate/src/paged/router.rs
+--- a/crate/src/paged/router.rs	2026-11-20 16:30:10.842412832 +0100
++++ b/crate/src/paged/router.rs	2026-11-20 17:13:51.519651049 +0100
+@@ -388,6 +388,29 @@
+ 
+     // Queries
+ 
++    /// EXPERIMENT: just the fat binary search.
++    #[inline(always)]
++    pub(super) fn top(&self, x: &[u8], hasher: &H::Hasher<'_>) -> u32 {
++        let mut top = self.root;
++        let b = x.len().min(self.max_ext);
++        if b > 0 && !is_leaf(self.root) {
++            fat_binary_search(
++                hasher,
++                0,
++                b,
++                |h| self.map.prefetch(h & self.sig_mask),
++                |f, h| {
++                    let (extent, id) = self
++                        .map
++                        .find(h & self.sig_mask, f, |id| self.handle_len(id) == f)?;
++                    top = id;
++                    Some(extent)
++                },
++            );
++        }
++        top
++    }
++
+     /// Returns the pages that are likely to contain `x`.
+     ///
+     /// The result is based on signatures only: the caller must check
+diff -ruN a/crate/src/utils/hash.rs b/crate/src/utils/hash.rs
+--- a/crate/src/utils/hash.rs	2026-11-20 16:30:10.842650912 +0100
++++ b/crate/src/utils/hash.rs	2026-11-20 17:17:06.171792976 +0100
+@@ -246,6 +246,103 @@
+     }
+ }
+ 
++
++#[inline(always)]
++#[allow(unused_unsafe)]
++fn crc_step(state: u32, word: u64) -> u32 {
++    #[cfg(all(target_arch = "x86_64", target_feature = "sse4.2"))]
++    unsafe {
++        core::arch::x86_64::_mm_crc32_u64(state as u64, word) as u32
++    }
++    #[cfg(all(target_arch = "aarch64", target_feature = "crc"))]
++    unsafe {
++        core::arch::aarch64::__crc32cd(state, word)
++    }
++}
++
++#[derive(Debug, Clone, Copy, Default)]
++pub struct Crc2;
++
++pub struct Crc2Hasher<'a> {
++    key: &'a [u8],
++    seed: u64,
++    inline: [MaybeUninit<u32>; INLINE],
++}
++
++impl HashPrefixes for Crc2 {
++    type Hasher<'a> = Crc2Hasher<'a>;
++
++    #[inline]
++    fn hash_prefix(key: &[u8], f: usize, seed: u64) -> u64 {
++        Self::hasher(key, f, seed).hash(f)
++    }
++
++    #[inline(always)]
++    fn hasher(key: &[u8], limit: usize, seed: u64) -> Crc2Hasher<'_> {
++        let n = (limit / 8).min(INLINE - 1);
++        let mut hasher = Crc2Hasher { key, seed, inline: [MaybeUninit::uninit(); INLINE] };
++        let mut state = !(seed as u32);
++        hasher.inline[0].write(state);
++        for (i, w) in key[..8 * n].chunks_exact(8).enumerate() {
++            state = crc_step(state, u64::from_le_bytes(w.try_into().unwrap()));
++            hasher.inline[i + 1].write(state);
++        }
++        hasher
++    }
++}
++
++impl PrefixHasher for Crc2Hasher<'_> {
++    #[inline(always)]
++    fn hash(&self, f: usize) -> u64 {
++        // EXPERIMENT: keys longer than 256 bytes are not supported
++        let state = unsafe { self.inline.get_unchecked(f / 8).assume_init() };
++        let state = crc_step(state, tail(self.key, f));
++        let z = (((state as u64) << 32 | (f as u64 & 0xFFFF_FFFF)) ^ self.seed).wrapping_mul(K1 | 1);
++        let z = (z ^ (z >> 32)).wrapping_mul(K3 | 1);
++        z ^ (z >> 32)
++    }
++}
++
++#[derive(Debug, Clone, Copy, Default)]
++pub struct Crc1;
++
++pub struct Crc1Hasher<'a> {
++    key: &'a [u8],
++    seed: u64,
++    inline: [MaybeUninit<u32>; INLINE],
++}
++
++impl HashPrefixes for Crc1 {
++    type Hasher<'a> = Crc1Hasher<'a>;
++
++    #[inline]
++    fn hash_prefix(key: &[u8], f: usize, seed: u64) -> u64 {
++        Self::hasher(key, f, seed).hash(f)
++    }
++
++    #[inline(always)]
++    fn hasher(key: &[u8], limit: usize, seed: u64) -> Crc1Hasher<'_> {
++        let n = (limit / 8).min(INLINE - 1);
++        let mut hasher = Crc1Hasher { key, seed, inline: [MaybeUninit::uninit(); INLINE] };
++        let mut state = !(seed as u32);
++        hasher.inline[0].write(state);
++        for (i, w) in key[..8 * n].chunks_exact(8).enumerate() {
++            state = crc_step(state, u64::from_le_bytes(w.try_into().unwrap()));
++            hasher.inline[i + 1].write(state);
++        }
++        hasher
++    }
++}
++
++impl PrefixHasher for Crc1Hasher<'_> {
++    #[inline(always)]
++    fn hash(&self, f: usize) -> u64 {
++        // EXPERIMENT: keys longer than 256 bytes are not supported
++        let state = unsafe { self.inline.get_unchecked(f / 8).assume_init() };
++        let state = crc_step(state, tail(self.key, f));
++        (((state as u64) << 32 | (f as u64 & 0xFFFF_FFFF)) ^ self.seed).wrapping_mul(K1 | 1)
++    }
++}
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff -ruN a/crate/src/utils/mod.rs b/crate/src/utils/mod.rs
+--- a/crate/src/utils/mod.rs	2026-11-20 16:28:57.131554282 +0100
++++ b/crate/src/utils/mod.rs	2026-11-20 17:17:06.172287979 +0100
+@@ -8,7 +8,7 @@
+ //! numbers, longest common prefixes, and prefix hashing.
+ 
+ mod hash;
+-pub use hash::{Chain, ChainHasher, HashPrefixes, PrefixHasher, Xxh3, Xxh3Hasher};
++pub use hash::{Chain, ChainHasher, Crc1, Crc2, HashPrefixes, PrefixHasher, Xxh3, Xxh3Hasher};
+ 
+ /// Returns the 2-fattest number in the interval (`a`..`b`], that is, the
+ /// number in the interval with the largest number of trailing zeros.
+diff -ruN a/bench/zfast-bench/src/main.rs b/bench/zfast-bench/src/main.rs
+--- a/bench/zfast-bench/src/main.rs	2026-11-20 16:53:15.428160740 +0100
++++ b/bench/zfast-bench/src/main.rs	2026-11-20 17:17:06.172546022 +0100
+@@ -215,6 +215,8 @@
+     }
+     if std::env::var("ZFAST_STATS").is_ok() {
+         // The cost of the router alone, and of finding the page
++        r.time("route-top", r.reps, hits, |k| set.route_top(k) as usize);
++        r.time("route-len", r.reps, hits, |k| k.len());
+         r.time("route-hit", r.reps, hits, |k| set.route(k) as usize);
+         r.time("route-miss", r.reps, misses, |k| set.route(k) as usize);
+         r.time("page-hit", r.reps, hits, |k| set.page_stats(k).0 as usize);
+@@ -439,6 +441,8 @@
+             match name {
+                 "zpaged" => run_paged::<Xxh3>(&r, &keys, &hits, &misses),
+                 "zpaged-chain" => run_paged::<Chain>(&r, &keys, &hits, &misses),
++                "zpaged-crc1" => run_paged::<zfast::utils::Crc1>(&r, &keys, &hits, &misses),
++                "zpaged-crc2" => run_paged::<zfast::utils::Crc2>(&r, &keys, &hits, &misses),
+                 "zset" => run_set::<Xxh3>(&r, &keys, &hits, &misses),
+                 "zset-chain" => run_set::<Chain>(&r, &keys, &hits, &misses),
+                 "zft" => run_trie::<Xxh3>(&r, &keys, &hits, &misses),
