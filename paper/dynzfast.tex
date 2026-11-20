@@ -381,9 +381,13 @@ of the function computing the signatures. In particular:
   \item With a dictionary providing lookups in constant worst-case time and updates in constant expected amortized time, such as
   dynamic perfect hashing~\cite{DKMDPHULB} or Cuckoo hashing~\cite{PaRCH}, the query bounds of Theorem~\ref{th:bounds} are worst-case bounds,
   the query bounds of Theorem~\ref{th:boundslong} hold with high probability, and the update bounds hold in expectation (amortized).
-  \item If an upper bound $N$ on $n$ is known in advance, there are dictionaries using $O(N)$ words in which, for every
-  sequence of $N^{O(1)}$ operations, with probability $1-1/N^{O(1)}$ every operation takes constant time in the worst
-  case~\cite{Arbitman2010Backyard} (the result is stated for keys of one word): with such a dictionary all bounds of 
+  \item There are dictionaries in which every operation takes constant time in the worst case with high probability.
+  If an upper bound $N$ on $n$ is known in advance, de-amortized Cuckoo hashing~\cite{Arbitman2009Deamortized} and
+  backyard Cuckoo hashing~\cite{Arbitman2010Backyard} use $O(N)$ words, and for every
+  sequence of $N^{O(1)}$ operations, with probability $1-1/N^{O(1)}$ every operation takes constant time
+  (the results are stated for keys of one word). The bound $N$ is not necessary: iceberg hashing~\cite{Bender2023Iceberg} 
+  uses space linear in the current number $n$ of keys, which can be as large as $\Theta(w)$ bits, resizing the table incrementally, 
+  and each operation takes constant time with high probability in $n$. With such dictionaries all bounds of 
   Theorems~\ref{th:bounds} and~\ref{th:boundslong}, including those for updates, hold with high probability.
 \end{itemize}
 The space bounds of Theorems~\ref{th:bounds} and~\ref{th:boundslong} assume a dictionary using at most $3n$ buckets
@@ -548,18 +552,32 @@ queries in $O((|x|+|x^\pm|)/B+\lg_B n)$ I/Os; updates are amortized, and require
 if the keys are kept sorted on disk, and $O(|x|/B+\lg_B n)$ I/Os otherwise. 
 These bounds are in general incomparable to ours, which do not depend on $n$: we replace $\lg_B n$ with the logarithm of the length of the strings involved. 
 As we already remarked, the structure of Ru\v{z}i\'c~\cite{Ruzic2009Making} has the same I/O bounds as ours for queries in the static case.
+The same alternative appears in the static, compressed setting: weak prefix search, 
+which a static z-fast trie solves in $O(|p|/B+\lg|p|)$ I/Os using $O(n\lg\ell)$ bits for $n$ strings of 
+average length $\ell$~\cite{Belazzougui2010Fast}, can be solved within the same space in $O(|p|/B+\lg_B n)$ I/Os 
+by replacing the z-fast trie with Patricia tries endowed with Karp--Rabin fingerprints and laid out by centroid decomposition, 
+with high probability~\cite{Ferragina2013Weak} or deterministically~\cite{Ferragina2016Compressed}. 
 Finally, note
 that the RAM time bound of structures based on B-trees is essentially always worse than ours.
 
 \paragraph{Ordered indices for main memory.} Several data structures engineered for main-memory databases and key-value stores 
 provide ordered access to variable-length keys. Tries with adaptive node layouts, such as ART~\cite{Leis2013Adaptive}, 
-Masstree~\cite{Mao2012Cache} (a trie whose nodes are B$^+$-trees indexing eight bytes of the keys) and HOT~\cite{Binna2018HOT} (a binary Patricia trie whose nodes are 
-grouped into compound nodes of bounded fanout so as to minimize the height), perform a number of steps proportional to the depth of the trie.
+Masstree~\cite{Mao2012Cache} (a trie whose nodes are B$^+$-trees indexing eight bytes of the keys) and HOT~\cite{Binna2018HOT,Binna2022Height} (a binary Patricia trie whose nodes are 
+grouped into compound nodes of bounded fanout so as to minimize the height), perform a number of steps proportional to the height of the resulting tree
+(on $50$ million URLs,~\cite{Binna2022Height} reports a height of $62$ for ART, $44$ for Masstree and $9$ for HOT).
 The Cuckoo Trie~\cite{Zeitak2021Cuckoo} stores the nodes of a trie in a hash table indexed by the string associated with each node, as we do, 
 but descends the trie level by level, prefetching the nodes of the next few levels so that the associated cache misses overlap. 
-Current B-trees for strings truncate the prefixes common to all keys of a node 
-and use short separators~\cite{Bayer1977Prefix}, and they store in each node a few bytes of the keys after the common prefix, and hash-based fingerprints, so as to avoid accessing the keys~\cite{Muller2025BTrees,Chen2025FB}; 
-learned indices for strings have been proposed, too~\cite{Spector2021Bounding,Yang2024LITS}. 
+B-trees for strings are still based on the \emph{prefix B-trees} of Bayer and Unterauer~\cite{Bayer1977Prefix}, which store 
+only once the prefix common to all keys of a node, and use as separators the shortest strings separating the keys of adjacent
+leaves (see~\cite[Section~3.5]{Graefe2011Modern}): in a recent comparison of seven techniques for compressing the keys of a B-tree, 
+the combination of these two is reported to be the fastest, answering point queries from $25$\% to $120$\% faster 
+than a B-tree storing whole keys~\cite{Gao2024Revisiting}. Moreover, a few bytes of each key following the common prefix can be stored in the 
+fixed-size entries of a node, so that most comparisons are decided without accessing the key: these are the ``poor man's normalized keys'' 
+of Graefe and Larson~\cite{Graefe2001Btree}, who trace the idea back to cache-conscious sorting. Recent designs for main memory
+add hash-based fingerprints, which speed up point queries~\cite{Muller2025BTrees,Chen2025FB}. 
+Learned indices for strings have been proposed, too~\cite{Wang2020SIndex,Spector2021Bounding,Yang2024LITS,Yang2026Learned}. 
+Hyperion~\cite{Masker2019Hyperion}, a trie designed for space efficiency, has been evaluated on $7.95$ billion $n$-grams with an 
+average length of $23$ bytes. 
 
 The structure closest to ours is Wormhole~\cite{WNJWormhole}: the keys are stored in a linked list of leaves containing at most $128$ keys, 
 each leaf is associated with a short string, its \emph{anchor}, that separates its keys from those of the previous leaf, 
@@ -573,14 +591,13 @@ Since a hash table contains all the prefixes of the anchors, the number of its e
 length of the anchors, whereas a z-map on the same anchors would contain one entry per anchor. On the other hand, as all prefixes are present 
 a plain bisection suffices. As only one string per leaf is indexed, the hash table is a small fraction of the whole index (from $0.34$\% to $3.7$\% on the data sets of~\cite{WNJWormhole}); 
 the same approach can of course be applied to z-fast tries. 
-The z-fast trie has also been used as a building block of a trie for the processing-in-memory model~\cite{Kang2023PIM}.
 
 \paragraph{Uses of z-fast tries.} After~\cite{BBPMMPH,Belazzougui2010Fast,BBVDZT}, z-fast tries (in most cases, the static 
 version, often with signatures given by Karp--Rabin fingerprints and a final verification) have been used as a component of several other data structures: 
 \begin{itemize}
 \item in text indices based on Lempel--Ziv parsings, grammars, and other forms of dictionary compression, to locate 
 in time logarithmic in the length of a pattern the node of a compacted trie of phrase boundaries associated with each way of splitting the 
-pattern~\cite{Gagie2012Faster,Bille2018Time,Christiansen2018Compressed,Navarro2019Universal,Christiansen2021Optimal,Tsuruta2020Grammar,Gagie2024Space,Kosolobov2026Compressed} (see 
+pattern~\cite{Gagie2014LZ77,Bille2018Time,Christiansen2018Compressed,Navarro2019Universal,Christiansen2021Optimal,Tsuruta2020Grammar,Gagie2024Space,Kosolobov2026Compressed} (see 
 also the survey~\cite{Navarro2021Indexing});
 \item in indices based on suffix arrays and their samplings: the z-map and fat binary search have been 
 extended to compacted tries on arbitrary alphabets and applied to suffix 
@@ -590,6 +607,10 @@ time~\cite{Navarro2017Time,Gagie2020Fully}, as a compact index of the factors of
 the emptiness of a range in small space~\cite{Belazzougui2021Range,Goswami2015Approximate};
 \item in streaming algorithms for dictionary matching~\cite{Clifford2015Dictionary,Gawrychowski2022Streaming};
 \item in algorithms that compute parsings in compressed space, which use the dynamic structure described in this paper~\cite{Badkobeh2017Two} or fat binary search~\cite{Kempa2017LZ};
+\item in the \emph{PIM-trie} of Kang \textit{et al.}~\cite{Kang2023PIM}, a batch-parallel trie for the processing-in-memory model 
+whose design, in the words of the authors, ``builds upon the idea in z-fast tries of combining both a radix tree and a hash table'': 
+z-fast tries on strings shorter than $w$ bits, attached to the nodes whose depth is a multiple of $w$, lead with high probability in 
+time $O(\lg w)$ to the nodes of the compacted trie in the following $w$ levels;
 \item in monotone minimal perfect hashing~\cite{BBPMMPH,Belazzougui2011Theory}, where a z-fast trie on a subset of the keys is used to distribute the keys into buckets: 
 the resulting functions use $O(n\lg\lg\lg u)$ bits for a universe of size $u$, which has been shown to be optimal~\cite{Assadi2023Tight,Kosolobov2024Simplified}, 
 and they are still used as a reference in experimental work~\cite{Ferragina2023Learned}.
@@ -597,9 +618,13 @@ and they are still used as a reference in experimental work~\cite{Ferragina2023L
 
 \paragraph{Static dictionaries of strings.} When the set of strings is static and space is the main concern, the structures of choice are
 compressed representations such as front coding with a binary search on sampled strings~\cite{MartinezPrieto2016Practical}, 
-path-decomposed tries~\cite{Grossi2015Fast}, and succinct tries~\cite{Zhang2020Succinct,Boffa2024CoCo}; these structures use a fraction of the space of the strings, 
+path-decomposed tries~\cite{Grossi2015Fast}, compressed double-array tries~\cite{Kanda2017Compressed}, and succinct tries~\cite{Zhang2020Succinct,Boffa2024CoCo}; these structures use a fraction of the space of the strings, 
 and are out of the scope of this paper. We just note that the binary search of a front-coded list is the kind of search that a z-fast trie on 
-the sampled strings can replace. The measurements of a z-fast trie reported in the literature we are aware of (e.g.,~\cite{TKKctriepp,Kanda2020Dynamic,Zhang2026C2}) 
+the sampled strings can replace. 
+The same two-level organization is engineered in~\cite{Ferragina2025Two} for dictionaries of billions of strings, 
+with a succinct Patricia trie on the first string of each block of a rear-coded list kept on disk: the trie 
+is descended node by node, and the search is completed by accessing one of the indexed strings.
+The measurements of a z-fast trie reported in the literature we are aware of (e.g.,~\cite{TKKctriepp,Kanda2020Dynamic,Zhang2026C2}) 
 use a C++ port of our Java implementation, which works on bits and stores one key per leaf.
 
 \section{Notation and tools}
@@ -1440,7 +1465,22 @@ By a union bound on the fewer than $n$ handles, a given prefix is bad with proba
 with probability at least $1-3/n^{c-1}$ no probed prefix is bad. In that case, the execution of the algorithm with signatures
 is identical to the execution with an exact z-map: by induction on the probes, a prefix that is a handle is found, as no other handle
 has its signature, and a prefix that is not a handle is not, as no handle has its signature. In particular, there are no false positives.
-\todo[inline]{The implementations use different hash functions, for which no such bound is available.}
+
+The argument uses just two properties of the signatures: two distinct strings collide with small probability over a random choice that is
+independent of the strings, and the signature of a prefix can be computed in constant time from preprocessed values. 
+Rabin's fingerprints~\cite{Rabin1981Fingerprinting,Broder1993Some} have the first property: one chooses uniformly at random an irreducible polynomial $P$ of 
+degree $k$ with coefficients in $\mathbf Z_2$, and the fingerprint of a string is the remainder of the division by $P$ of the polynomial whose 
+coefficients are the bits of the string, preceded by a one, so that strings of different lengths are associated with different polynomials. 
+As for $k\geq 4$ there are at least $2^{k-1}/k$ such $P$, and at most $L/k$ of them divide a nonzero polynomial of degree at most $L$, two distinct strings of 
+length at most $L$ have the same fingerprint with probability at most $2L/2^k$, and the argument above goes through for $2^k\geq 2Ln^c$.
+The fingerprint of a string extended by one bit is obtained by a shift and an exclusive or~\cite{Rabin1981Fingerprinting}, but
+extending it by a word is usually implemented with tables~\cite{Broder1993Some}, 
+or with an instruction multiplying polynomials with coefficients in $\mathbf Z_2$, which is not available in our model: 
+this is why we use polynomials over $\mathbf Z_p$.
+The cyclic redundancy checks used as signatures by some implementations of similar structures, such as Wormhole~\cite{WNJWormhole}, are computed 
+in the same way, but the polynomial is fixed and has degree $32$, so no such bound is available; the same is true of the hash functions
+used by our implementations (see Section~\ref{sec:experiments}).
+In any case, the function computing the signatures affects only the running time, as the result of the search is always verified.
 
 Thus,
 Algorithm~\ref{algo:exitorparex} will perform at most $w+2$ accesses to the z-map and end with the correct output with
@@ -2319,6 +2359,7 @@ Finally, in the case of the signed z-fast trie we need to store a signature of $
 
 
 \section{Experiments}
+\label{sec:experiments}
 
 In this section we show that on large collections of integers the z-fast trie
 can beat red-black binary trees, and that on large collections of long strings it
@@ -2427,8 +2468,9 @@ Each bucket contains, for each key, a $16$-bit hash, used for membership queries
 used for ordered searches, so that in most cases a single key has to be compared with the query. 
 
 We compare these structures with Wormhole (using its single-threaded interface), with the B-tree of the Rust standard library (\texttt{BTreeSet}, whose 
-nodes contain up to $11$ pointers to keys), and, in the static case, with a binary search on the sorted keys, 
-which are stored contiguously. We use $10$ million URLs from the \texttt{eu-2015} crawl in random order (their average length is $78$ bytes): 
+nodes contain up to $11$ pointers to keys: it uses none of the techniques for strings discussed in Section~\ref{sec:related}), and, in the static case, with a binary search on the sorted keys, 
+which are stored contiguously. Tries such as ART and HOT, which on URLs are reported to be significantly 
+faster than a B$^+$-tree with pointers to the keys~\cite{Binna2022Height}, are not included yet. We use $10$ million URLs from the \texttt{eu-2015} crawl in random order (their average length is $78$ bytes): 
 half of them are added to the structure, and the other half are used as queries for strings not in the set (``Contains$^-$'', ``Successor$^-$''); 
 we also report results for one million URLs. 
 All structures execute the same sequence of operations, reading keys and queries from contiguous buffers; ``Successor'' is the smallest key larger than or equal to the query, 

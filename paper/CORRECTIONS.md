@@ -257,6 +257,32 @@ state the contribution, with pointers to the section.
   `successor` returns the key itself for a key in the set; it passes only
   because random queries are almost never keys.
 
+## 7b. Second batch of primary sources (2026-11-20)
+
+Reports: `related-work/verified-indexes.md`, `verified-btrees-hashing.md`,
+`verified-static-uses.md`. Nothing the text said about these papers was wrong;
+the changes are precisions and additions.
+
+- First use in compressed text indices: the citation is now the LATIN 2014
+  paper of Gagie et al., which states that fat binary search with Karp-Rabin
+  fingerprints is its contribution (the LATA 2012 paper attains `O(m^2)`).
+- Strings in external memory: weak prefix search without z-fast tries
+  (Ferragina 2013; Ferragina and Venturini 2016).
+- Static dictionaries: the two-level dictionary of Ferragina, Rotundo and
+  Vinciguerra; compressed double arrays.
+- Ordered indices: B-trees for strings rewritten with attributions (prefix
+  B-trees, poor man's normalized keys, the comparison of Gao et al.); HOT
+  cited in its journal version, with the tree heights it reports; SIndex, the
+  journal version of LITS, Hyperion.
+- PIM-trie moved to the list of uses, with a description of what it uses.
+- The dictionary: de-amortized cuckoo hashing; iceberg hashing removes the
+  need for a bound on `n` known in advance and handles keys of `Theta(w)` bits.
+- Signatures: a remark on Rabin's fingerprints (the collision bound is derived
+  in the report, not printed in the sources: to be checked) and on CRCs; it
+  replaces the note on the hash functions of the implementations.
+- `sec:rust`: the text says that the B-tree baseline uses none of the
+  techniques for strings, and that ART and HOT are not included yet.
+
 ## 8. Open issues (each is a `\todo` in the text)
 
 - Abstract and `th:boundslong`: when an update splits or removes the root, the

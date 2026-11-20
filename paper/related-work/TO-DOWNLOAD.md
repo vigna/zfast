@@ -45,6 +45,24 @@ TODS 2(1), 1977, 10.1145/320521.320530); Karp, Rabin (IBM J. Res. Dev. 31(2),
 
 ## 3. Useful to extend the related work or the experiments
 
+**Done in part (2026-11-20).** Read, with reports in `verified-indexes.md`,
+`verified-btrees-hashing.md` and `verified-static-uses.md`, and the text
+updated accordingly: HOT (TODS 2022), Hyperion, SIndex, the journal version of
+LITS, PIM-trie, burst tries, HAT-trie (the ACSC 2007 paper only); Graefe's
+*Modern B-tree techniques*, Graefe and Larson, Gao et al.; de-amortized cuckoo
+hashing, iceberg hashing, Rabin's report, Broder; Belazzougui's encyclopedia
+entry (which says nothing about z-fast tries), Ferragina (TCS 2013), Ferragina
+and Venturini, Gagie et al. (LATIN 2014), Ferragina et al. (Inf. Syst. 2025),
+Kanda et al. (a preprint), Arroyuelo et al., Hsu and Ottaviano.
+
+**Still not read:** Graefe, *More modern B-tree techniques* (2024); the LATA
+2012 paper of Gagie et al. (its content is known from the LATIN 2014 paper and
+from arXiv); Yata (Marisa); the VLDB Journal version of the HAT-trie; the
+papers on IP and name lookup; Dietzfelbinger and Meyer auf der Heide (ICALP
+1990); Liu, Yin, Yu (ICALP 2020), credited by the iceberg paper with the first
+dynamically resizable dictionary with constant-time operations w.h.p.; the
+range filters; Bohannon et al. (partial keys); all of section 2.
+
 | Paper | Venue, DOI | What is needed |
 |---|---|---|
 | Belazzougui, *Predecessor search, string algorithms and data structures* | Encyclopedia of Algorithms, 2016, 10.1007/978-1-4939-2864-4_632 | What it says about z-fast tries and strings. |
