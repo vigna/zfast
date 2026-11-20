@@ -283,6 +283,41 @@ the changes are precisions and additions.
 - `sec:rust`: the text says that the B-tree baseline uses none of the
   techniques for strings, and that ART and HOT are not included yet.
 
+## 7c. Points left for the authors to decide (kept for later, 2026-11-20)
+
+These are places where the corrected text makes a choice or leaves a tension;
+they are not `\todo`s in the text.
+
+- **Abstract.** Its wording on expectation versus high probability was
+  changed to match the theorems.
+- **Signature length** (`sec:dict`). Now `max{w, c lg n + lg L} + O(1)` bits,
+  as `p > 2^w` is required, instead of the `c lg n + lg w` of the original
+  analysis. Short stored signatures can be recovered by hashing the signature
+  with a second universal function (`verified-hashing.md`, a.3); not applied.
+- **Duplicate marks versus the dictionary.** The duplicate-mark mechanism is
+  described for open addressing, but the high-probability query bounds for
+  long strings need worst-case lookups (cuckoo hashing, dynamic perfect
+  hashing), where there is no probe sequence. One way out: for `c >= 3` there
+  are no duplicates at all with high probability, so a duplicate can be
+  treated as a failure.
+- **Cost of arithmetic.** "Constant time" for signatures means arithmetic
+  modulo a prime of `c + 2` words, and the stored `H_i` take `c + 2` words
+  each.
+- **Probability for small `n`.** `1 - 3/n^{c-1}` is vacuous for small `n`;
+  `1 - 3/2^{(c-1)w}`, also in the text, is the bound that controls the
+  expected cost of the fallback. Operations locating two exit nodes double
+  the constant.
+- **Rabin fingerprints remark** (`sec:dict`). The bound `2L/2^k` is derived in
+  `verified-btrees-hashing.md`, not printed in Rabin or Broder; the sentence
+  on why polynomials over `Z_p` are used is in the authors' voice.
+- **Baseline sentence** (`sec:rust`). The text says that the B-tree baseline
+  uses none of the techniques for strings and that ART and HOT are not
+  included yet.
+
+Settled by the authors: the bound attributed to the ESA 2010 paper for weak
+prefix search, and its improvement by Ferragina and by Ferragina and Venturini,
+are correct; the LATIN 2014 paper and zuffix arrays stay in separate items.
+
 ## 8. Open issues (each is a `\todo` in the text)
 
 - Abstract and `th:boundslong`: when an update splits or removes the root, the
