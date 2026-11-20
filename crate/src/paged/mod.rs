@@ -9,10 +9,14 @@
 
 mod page;
 mod router;
+mod segment;
+mod slab;
 
 use crate::utils::{HashPrefixes, PrefixHasher, Xxh3, lcp};
-use page::{HEAP_LEN, Hint, MAX_KEYS, NONE, Page, Pages, blob_size};
-use router::Router;
+use page::{NONE, Page, ROOM, blob_size};
+use router::{Anchors, Router};
+use segment::{MAX_PAGES, Segment, home_tag};
+use slab::Slab;
 use std::cmp::Ordering;
 use std::fmt;
 
@@ -101,47 +105,57 @@ impl fmt::Debug for PagedKey<'_> {
     }
 }
 
-/// A page with fewer keys and fewer bytes than these thresholds is merged
-/// with a neighbor, if possible.
-const MERGE_KEYS: usize = MAX_KEYS / 4;
-const MERGE_BYTES: usize = HEAP_LEN / 4;
-/// A merge is performed only if the resulting page does not exceed these
-/// thresholds.
-const MERGED_KEYS: usize = MAX_KEYS * 2 / 3;
-const MERGED_BYTES: usize = HEAP_LEN * 2 / 3;
+/// A page using fewer bytes than this threshold is merged with a neighbor,
+/// if the resulting page does not use more bytes than the second threshold.
+const MERGE_BYTES: usize = ROOM / 4;
+const MERGED_BYTES: usize = ROOM * 2 / 3;
+/// A segment with a single page is merged with the previous one if the
+/// result has at most this number of keys.
+const MERGED_KEYS: usize = segment::MAX_KEYS / 2;
 
-/// A dynamic ordered set of byte strings, stored in pages that are indexed
-/// by a z-fast trie.
+impl Anchors for Slab<Segment> {
+    #[inline(always)]
+    fn low(&self, id: u32) -> &[u8] {
+        self.get(id).low()
+    }
+}
+
+/// A dynamic ordered set of byte strings, stored in pages that are grouped
+/// in segments indexed by a z-fast trie.
 ///
 /// The keys are partitioned into consecutive intervals, each stored in a
 /// *page* of four kilobytes: the keys of a page are stored in the page,
-/// without the prefix they share, together with the extremes of the
-/// interval (the *fences*). The lower fences of the pages are short
-/// separators, and they are indexed by a z-fast trie, the *router*.
+/// without the prefix they share. Consecutive pages (up to 64) form a
+/// *segment*, and the smallest strings of the intervals of the segments,
+/// which are short separators, are indexed by a z-fast trie, the *router*.
 ///
-/// This organization is that of a B-tree whose internal nodes have been
-/// replaced by a z-fast trie, and it shares with [`ZFastSet`](crate::ZFastSet)
-/// the idea of indexing with a trie one string every few dozen keys. There
-/// are however three differences with respect to [`ZFastSet`](crate::ZFastSet)
-/// that make this structure much faster on large sets, where the cost of an
-/// operation is essentially the number of cache misses it causes, one after
-/// the other:
+/// On a large set the cost of an operation is essentially the number of
+/// cache misses it causes, one after the other, and the structure is
+/// designed so that this number is small and does not depend on the size of
+/// the set:
 ///
-/// - The router performs a fat binary search using just signatures, without
-///   ever comparing the string with the extent of a node, and thus accessing
-///   only a hash table and one node, which fit the cache even for very large
-///   sets (there is one node every [`MAX_KEYS`] keys at most, whatever the
-///   length of the keys). The search provides at most two candidate pages,
-///   and the fences tell us which is the right one, if any. If none is,
-///   which happens with negligible probability, an exact search is performed.
-///   Thus, as in all structures of this crate, hashing influences only
-///   the running time.
+/// - The router has one leaf every few thousand keys, so it fits the cache
+///   even for sets with billions of keys, whatever their length. It performs
+///   a fat binary search using just signatures, without ever comparing the
+///   string with the extent of a node. The search provides at most two
+///   candidate segments, and the extremes of the interval of each segment,
+///   which are stored in the segment, tell us which is the right one, if
+///   any. If none is, which happens with negligible probability, an exact
+///   search is performed. Thus, as in all structures of this crate, hashing
+///   influences only the running time.
 ///
-/// - Keys are stored in the page, so there is no pointer to follow.
+/// - A segment contains a hash table mapping its keys to their position, so
+///   a membership query accesses the segment, and then the key, which is
+///   stored in a page with no further indirection.
 ///
-/// - Each page contains a small hash table, used by membership queries,
-///   and sorted arrays, used by order queries. In both cases, the cache lines
-///   that will be accessed are known as soon as the page is known, so they
+/// - A segment contains also a *blind directory* of its pages, in the style
+///   of the nodes of a string B-tree, taking just four bytes per page: the
+///   page containing a string is usually found by comparing the string with
+///   the smallest string of a single page. Thus, order queries access the
+///   segment, usually one page, and a key.
+///
+/// - In all cases, the cache lines that will be accessed in a segment or in
+///   a page are known as soon as the segment or the page is known, so they
 ///   can be fetched at the same time.
 ///
 /// Since keys are stored without a prefix, methods return keys as instances
@@ -166,18 +180,23 @@ const MERGED_BYTES: usize = HEAP_LEN * 2 / 3;
 /// assert_eq!(set.len(), 9999);
 /// ```
 pub struct ZFastPagedSet<H = Xxh3> {
-    pages: Pages,
+    pages: Slab<Page>,
+    segs: Slab<Segment>,
     router: Router<H>,
     /// A page used when splitting and merging.
     scratch: Box<Page>,
-    /// The last page.
+    /// The last segment.
     last: u32,
     len: usize,
     sig_bits: u32,
 }
 
-/// The first page; it is never deleted.
+/// The first segment; it is never deleted.
 const FIRST: u32 = 0;
+
+/// The position of a key: a segment, the rank of a page in the segment, and
+/// the rank of the key in the page.
+type Pos = (u32, usize, usize);
 
 impl<H: HashPrefixes> Default for ZFastPagedSet<H> {
     fn default() -> Self {
@@ -201,19 +220,23 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
     ///
     /// If `sig_bits` is greater than 64.
     pub fn with_sig_bits(sig_bits: u32) -> Self {
-        let mut pages = Pages::new();
-        let first = pages.alloc();
+        let mut pages = Slab::new();
+        let mut segs = Slab::new();
+        let page = pages.alloc();
+        let page_ref: &mut Page = pages.get_mut(page);
+        page_ref.reset(b"", None);
+        let first = segs.alloc();
         debug_assert_eq!(first, FIRST);
-        let page = pages.get_mut(first);
-        page.reset(b"", None);
-        page.prev = NONE;
-        page.next = NONE;
-        let mut scratch = Page::new_boxed();
-        scratch.clear();
+        let seg: &mut Segment = segs.get_mut(first);
+        seg.reset(b"", None);
+        seg.prev = NONE;
+        seg.next = NONE;
+        seg.insert_page(0, 0, page);
         Self {
             pages,
+            segs,
             router: Router::new(sig_bits),
-            scratch,
+            scratch: Page::new_boxed(),
             last: first,
             len: 0,
             sig_bits,
@@ -242,19 +265,28 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
         self.pages.len()
     }
 
+    /// Returns the number of segments.
+    pub fn num_segments(&self) -> usize {
+        self.segs.len()
+    }
+
     /// Returns an estimate of the number of bytes used by the structure,
     /// including the keys.
     pub fn mem_size(&self) -> usize {
         let mut overflow = 0;
         let mut id = FIRST;
         while id != NONE {
-            let page = self.pages.get(id);
-            overflow += page.overflow_bytes();
-            id = page.next;
+            let seg = self.segs.get(id);
+            overflow += seg.overflow_bytes();
+            for pos in 0..seg.npages() {
+                overflow += self.pages.get(seg.page(pos)).overflow_bytes();
+            }
+            id = seg.next;
         }
         size_of::<Self>()
             + size_of::<Page>()
             + self.pages.mem_size()
+            + self.segs.mem_size()
             + overflow
             + self.router.mem_size()
     }
@@ -264,46 +296,32 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
         self.router.mem_size()
     }
 
-    /// Returns the 16 bits of hash used inside pages, given the hash of the
-    /// key.
+    /// Returns the segment whose interval contains `x`, after calling
+    /// `prefetch` on the candidates proposed by the router.
     #[inline(always)]
-    fn hash16(hash: u64) -> u16 {
-        (hash >> 24) as u16
-    }
-
-    /// Returns the page whose interval contains `x`, and the 16 bits of hash
-    /// of `x` used inside pages.
-    #[inline(always)]
-    fn locate(&self, x: &[u8], ordered: bool) -> (u32, u16) {
-        let hasher = self.router.hasher(x);
-        let h16 = Self::hash16(hasher.hash(x.len()));
-        let hint = if ordered {
-            Hint::Ordered
-        } else {
-            Hint::Point(h16)
-        };
-        let candidates = self.router.candidates(x, &hasher);
+    fn segment(&self, x: &[u8], hasher: &H::Hasher<'_>, prefetch: impl Fn(&Segment)) -> u32 {
+        let candidates = self.router.candidates(x, hasher);
         let candidates = candidates.as_slice();
         for &id in candidates {
-            self.pages.get(id).prefetch(hint);
+            prefetch(self.segs.get(id));
         }
         for &id in candidates {
-            if self.pages.get(id).covers(x) {
-                return (id, h16);
+            if self.segs.get(id).covers(x) {
+                return id;
             }
         }
-        (self.locate_slow(x), h16)
+        self.segment_slow(x)
     }
 
     #[cold]
     #[inline(never)]
-    fn locate_slow(&self, x: &[u8]) -> u32 {
-        let id = self.router.locate(x, &self.pages);
-        debug_assert!(self.pages.get(id).covers(x));
+    fn segment_slow(&self, x: &[u8]) -> u32 {
+        let id = self.router.locate(x, &self.segs);
+        debug_assert!(self.segs.get(id).covers(x));
         id
     }
 
-    /// Returns the number of candidate pages that the router proposes for
+    /// Returns the number of candidate segments that the router proposes for
     /// `x`, and the index of the one containing `x`, if any (otherwise, an
     /// exact search is necessary).
     #[doc(hidden)]
@@ -315,12 +333,12 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
             candidates.len(),
             candidates
                 .iter()
-                .position(|&id| self.pages.get(id).covers(x)),
+                .position(|&id| self.segs.get(id).covers(x)),
         )
     }
 
-    /// Returns the first candidate page that the router proposes for `x`,
-    /// without accessing any page (for profiling).
+    /// Returns the first candidate segment that the router proposes for `x`,
+    /// without accessing any segment (for profiling).
     #[doc(hidden)]
     #[inline]
     pub fn route(&self, x: impl AsRef<[u8]>) -> u32 {
@@ -328,114 +346,218 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
         self.router.candidates(x, &self.router.hasher(x)).as_slice()[0]
     }
 
-    /// Returns the page containing `x`, without accessing the keys of the
-    /// page (for profiling).
+    /// Returns the segment containing `x`, and whether the first page
+    /// examined by an order query is the right one (for profiling).
     #[doc(hidden)]
     #[inline]
-    pub fn page_of(&self, x: impl AsRef<[u8]>) -> u32 {
-        self.locate(x.as_ref(), false).0
+    pub fn page_stats(&self, x: impl AsRef<[u8]>) -> (u32, bool) {
+        let x = x.as_ref();
+        let id = self.segment(x, &self.router.hasher(x), |s| s.prefetch_ordered());
+        let seg = self.segs.get(id);
+        let from = seg.candidate(x);
+        (id, seg.locate(x, from, &self.pages) == from)
+    }
+
+    /// Returns the slot of the page of a segment containing `x`, and the
+    /// offset of the blob of `x`, if `x` is in the segment.
+    #[inline(always)]
+    fn probe(&self, seg: &Segment, x: &[u8], home: u16, tag: u32) -> Option<(usize, u16)> {
+        let mut found = None;
+        seg.probe(home, tag, |slot, off| {
+            let page = self.pages.get(seg.page_in(slot));
+            page.prefetch_blob(off);
+            if page.is(off, x) {
+                found = Some((slot, off));
+            }
+            found.is_some()
+        });
+        found
+    }
+
+    /// Returns the segment whose interval contains `x` and, if `x` is in the
+    /// set, the slot of the page containing it and the offset of its blob,
+    /// after calling `prefetch` on the candidates proposed by the router.
+    #[inline(always)]
+    fn find(
+        &self,
+        x: &[u8],
+        hasher: &H::Hasher<'_>,
+        home: u16,
+        tag: u32,
+        prefetch: impl Fn(&Segment),
+    ) -> (u32, Option<(usize, u16)>) {
+        let candidates = self.router.candidates(x, hasher);
+        let candidates = candidates.as_slice();
+        for &id in candidates {
+            prefetch(self.segs.get(id));
+        }
+        for &id in candidates {
+            let seg = self.segs.get(id);
+            if seg.covers(x) {
+                return (id, self.probe(seg, x, home, tag));
+            }
+        }
+        let id = self.segment_slow(x);
+        (id, self.probe(self.segs.get(id), x, home, tag))
     }
 
     /// Returns true if the set contains `x`.
     #[inline]
     pub fn contains(&self, x: impl AsRef<[u8]>) -> bool {
         let x = x.as_ref();
-        let (id, h16) = self.locate(x, false);
-        let page = self.pages.get(id);
-        page.find(&x[page.plen()..], h16).is_some()
+        let hasher = self.router.hasher(x);
+        let (home, tag) = home_tag(hasher.hash(x.len()));
+        self.find(x, &hasher, home, tag, |s| s.prefetch_point(home))
+            .1
+            .is_some()
+    }
+
+    /// Returns `x` as a key of the set, if it is one, and otherwise the
+    /// position of the first key that is larger than `x` in the page
+    /// containing `x` (possibly just after the last key of the page).
+    ///
+    /// Membership is tested first, as it is faster than finding a position.
+    #[inline(always)]
+    fn key_or_pos(&self, x: &[u8]) -> Result<PagedKey<'_>, Pos> {
+        let hasher = self.router.hasher(x);
+        let (home, tag) = home_tag(hasher.hash(x.len()));
+        let (id, found) = self.find(x, &hasher, home, tag, |s| {
+            s.prefetch_ordered();
+            s.prefetch_point(home);
+        });
+        let seg = self.segs.get(id);
+        if let Some((slot, off)) = found {
+            return Ok(self.pages.get(seg.page_in(slot)).key_at(off));
+        }
+        let pos = self.page_of(seg, x);
+        let page = self.pages.get(seg.page(pos));
+        let (key, _) = page.lower_bound(&x[page.plen()..]);
+        Err((id, pos, key))
     }
 
     /// Returns the position of the first key at or after the given position,
     /// which can be just after the last key of a page.
     #[inline(always)]
-    fn forward(&self, mut id: u32, mut pos: usize) -> Option<(u32, usize)> {
+    fn forward(&self, (mut id, mut page, mut key): Pos) -> Option<Pos> {
         loop {
-            let page = self.pages.get(id);
-            if pos < page.len() {
-                return Some((id, pos));
+            let seg = self.segs.get(id);
+            if key < self.pages.get(seg.page(page)).len() {
+                return Some((id, page, key));
             }
-            id = page.next;
-            if id == NONE {
-                return None;
+            key = 0;
+            page += 1;
+            if page == seg.npages() {
+                id = seg.next;
+                if id == NONE {
+                    return None;
+                }
+                page = 0;
             }
-            pos = 0;
         }
     }
 
     /// Returns the position of the last key before the given position.
     #[inline(always)]
-    fn backward(&self, mut id: u32, mut pos: usize) -> Option<(u32, usize)> {
+    fn backward(&self, (mut id, mut page, mut key): Pos) -> Option<Pos> {
         loop {
-            if pos > 0 {
-                return Some((id, pos - 1));
+            if key > 0 {
+                return Some((id, page, key - 1));
             }
-            id = self.pages.get(id).prev;
-            if id == NONE {
-                return None;
+            if page > 0 {
+                page -= 1;
+            } else {
+                id = self.segs.get(id).prev;
+                if id == NONE {
+                    return None;
+                }
+                page = self.segs.get(id).npages() - 1;
             }
-            pos = self.pages.get(id).len();
+            key = self.pages.get(self.segs.get(id).page(page)).len();
         }
     }
 
-    #[inline(always)]
-    fn key_at(&self, pos: Option<(u32, usize)>) -> Option<PagedKey<'_>> {
-        pos.map(|(id, pos)| self.pages.get(id).key(pos))
+    /// Returns the position just after the last key.
+    fn end(&self) -> Pos {
+        let seg = self.segs.get(self.last);
+        let page = seg.npages() - 1;
+        (self.last, page, self.pages.get(seg.page(page)).len())
     }
 
-    /// Returns the page containing `x`, the number of keys of the page that
-    /// are smaller than `x`, and whether `x` is in the set.
     #[inline(always)]
-    fn search(&self, x: &[u8]) -> (u32, usize, bool) {
-        let (id, _) = self.locate(x, true);
-        let page = self.pages.get(id);
-        let (pos, found) = page.lower_bound(&x[page.plen()..]);
-        (id, pos, found)
+    fn key_at(&self, pos: Option<Pos>) -> Option<PagedKey<'_>> {
+        pos.map(|(id, page, key)| self.pages.get(self.segs.get(id).page(page)).key(key))
+    }
+
+    /// Returns the rank in a segment of the page containing `x`, which must
+    /// belong to the interval of the segment.
+    #[inline(always)]
+    fn page_of(&self, seg: &Segment, x: &[u8]) -> usize {
+        let from = seg.candidate(x);
+        self.pages.get(seg.page(from)).prefetch_slots();
+        seg.locate(x, from, &self.pages)
+    }
+
+    /// Returns the position of the first key that is not smaller than `x`
+    /// in the page containing `x` (possibly just after the last key of the
+    /// page), and whether `x` is in the set.
+    #[inline(always)]
+    fn search(&self, x: &[u8]) -> (Pos, bool) {
+        let id = self.segment(x, &self.router.hasher(x), |s| s.prefetch_ordered());
+        let seg = self.segs.get(id);
+        let pos = self.page_of(seg, x);
+        let page = self.pages.get(seg.page(pos));
+        let (key, found) = page.lower_bound(&x[page.plen()..]);
+        ((id, pos, key), found)
     }
 
     /// Returns the largest key that is less than or equal to `x`.
     #[inline]
     pub fn pred(&self, x: impl AsRef<[u8]>) -> Option<PagedKey<'_>> {
-        let (id, pos, found) = self.search(x.as_ref());
-        self.key_at(self.backward(id, pos + found as usize))
+        match self.key_or_pos(x.as_ref()) {
+            Ok(key) => Some(key),
+            Err(pos) => self.key_at(self.backward(pos)),
+        }
     }
 
     /// Returns the largest key that is less than `x`.
     #[inline]
     pub fn pred_strict(&self, x: impl AsRef<[u8]>) -> Option<PagedKey<'_>> {
-        let (id, pos, _) = self.search(x.as_ref());
-        self.key_at(self.backward(id, pos))
+        let (pos, _) = self.search(x.as_ref());
+        self.key_at(self.backward(pos))
     }
 
     /// Returns the smallest key that is greater than or equal to `x`.
     #[inline]
     pub fn succ(&self, x: impl AsRef<[u8]>) -> Option<PagedKey<'_>> {
-        let (id, pos, _) = self.search(x.as_ref());
-        self.key_at(self.forward(id, pos))
+        match self.key_or_pos(x.as_ref()) {
+            Ok(key) => Some(key),
+            Err(pos) => self.key_at(self.forward(pos)),
+        }
     }
 
     /// Returns the smallest key that is greater than `x`.
     #[inline]
     pub fn succ_strict(&self, x: impl AsRef<[u8]>) -> Option<PagedKey<'_>> {
-        let (id, pos, found) = self.search(x.as_ref());
-        self.key_at(self.forward(id, pos + found as usize))
+        let ((id, page, key), found) = self.search(x.as_ref());
+        self.key_at(self.forward((id, page, key + found as usize)))
     }
 
     /// Returns the smallest key.
     pub fn first(&self) -> Option<PagedKey<'_>> {
-        self.key_at(self.forward(FIRST, 0))
+        self.key_at(self.forward((FIRST, 0, 0)))
     }
 
     /// Returns the largest key.
     pub fn last(&self) -> Option<PagedKey<'_>> {
-        self.key_at(self.backward(self.last, self.pages.get(self.last).len()))
+        self.key_at(self.backward(self.end()))
     }
 
     /// Returns an iterator on the keys, in order.
     pub fn iter(&self) -> Iter<'_, H> {
         Iter {
             set: self,
-            front: (FIRST, 0),
-            back: (self.last, self.pages.get(self.last).len()),
+            front: (FIRST, 0, 0),
+            back: self.end(),
             remaining: self.len,
         }
     }
@@ -443,46 +565,103 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
     /// Returns an iterator on the keys that are greater than or equal to
     /// `x`, in order.
     pub fn iter_from(&self, x: impl AsRef<[u8]>) -> impl Iterator<Item = PagedKey<'_>> + '_ {
-        let (id, pos, _) = self.search(x.as_ref());
-        let mut next = self.forward(id, pos);
+        let (pos, _) = self.search(x.as_ref());
+        let mut next = self.forward(pos);
         std::iter::from_fn(move || {
-            let (id, pos) = next?;
-            next = self.forward(id, pos + 1);
-            Some(self.pages.get(id).key(pos))
+            let (id, page, key) = next?;
+            next = self.forward((id, page, key + 1));
+            self.key_at(Some((id, page, key)))
         })
     }
 
     /// Adds a key; returns true if the key was not in the set.
     pub fn insert(&mut self, x: impl AsRef<[u8]>) -> bool {
         let x = x.as_ref();
-        let (mut id, h16) = self.locate(x, true);
+        let hasher = self.router.hasher(x);
+        let (home, tag) = home_tag(hasher.hash(x.len()));
+        let mut id = self.segment(x, &hasher, |s| s.prefetch_ordered());
         loop {
-            let page = self.pages.get_mut(id);
+            let seg = self.segs.get(id);
+            if !seg.has_room() {
+                if seg.is_dirty() {
+                    self.rebuild_table(id);
+                } else {
+                    let new = self.split_segment(id);
+                    if x >= self.segs.get(new).low() {
+                        id = new;
+                    }
+                }
+                continue;
+            }
+            let pos = self.page_of(seg, x);
+            let slot = seg.slot(pos);
+            let page = self.pages.get_mut(seg.page_in(slot));
             let suffix = &x[page.plen()..];
-            let (pos, found) = page.lower_bound(suffix);
+            let (key, found) = page.lower_bound(suffix);
             if found {
                 return false;
             }
-            if page.insert(pos, suffix, h16) {
+            if let Some(off) = page.insert(key, suffix, home) {
+                self.segs.get_mut(id).add(home, tag, slot, off);
                 self.len += 1;
                 return true;
             }
             if page.is_dirty() && page.fits_compacted(suffix.len()) {
-                page.compact();
-                continue;
-            }
-            let new = self.split(id);
-            if x >= self.pages.low(new) {
-                id = new;
+                self.compact_page(id, slot);
+            } else if seg.npages() == MAX_PAGES {
+                let new = self.split_segment(id);
+                if x >= self.segs.get(new).low() {
+                    id = new;
+                }
+            } else {
+                self.split_page(id, pos);
             }
         }
     }
 
-    /// Splits a page, which must contain at least two keys, moving its
-    /// largest keys to a new page, which is returned.
-    fn split(&mut self, id: u32) -> u32 {
-        let new = self.pages.alloc();
-        std::mem::swap(self.pages.get_mut(id), &mut *self.scratch);
+    /// Returns the indices of the entries of the keys of a page in the
+    /// table of its segment, in order.
+    fn entries(&self, id: u32, slot: usize) -> Vec<usize> {
+        let seg = self.segs.get(id);
+        let page = self.pages.get(seg.page_in(slot));
+        (0..page.len())
+            .map(|i| seg.entry(page.hash(i), slot, page.off(i)))
+            .collect()
+    }
+
+    /// Compacts a page, updating the table of its segment.
+    fn compact_page(&mut self, id: u32, slot: usize) {
+        let entries = self.entries(id, slot);
+        let seg = self.segs.get_mut(id);
+        let mut entries = entries.into_iter();
+        self.pages
+            .get_mut(seg.page_in(slot))
+            .compact(|_, _, off| seg.relocate(entries.next().unwrap(), slot, off));
+    }
+
+    /// Returns the separator of the page following the page of given rank
+    /// of a segment, if any.
+    fn high_of(&self, id: u32, pos: usize) -> Option<Vec<u8>> {
+        let seg = self.segs.get(id);
+        if pos + 1 < seg.npages() {
+            Some(self.pages.get(seg.page(pos + 1)).low().to_vec())
+        } else {
+            seg.high().map(<[u8]>::to_vec)
+        }
+    }
+
+    /// Splits the page of given rank of a segment, which must contain at
+    /// least two keys, moving its largest keys to a new page of the same
+    /// segment, which must have fewer than [`MAX_PAGES`] pages.
+    fn split_page(&mut self, id: u32, pos: usize) {
+        let high = self.high_of(id, pos);
+        let seg = self.segs.get(id);
+        let slot = seg.slot(pos);
+        let new_slot = seg.free_slot();
+        let page = seg.page_in(slot);
+        let entries = self.entries(id, slot);
+        let new_page = self.pages.alloc();
+        std::mem::swap(self.pages.get_mut(page), &mut *self.scratch);
         let old = &*self.scratch;
         let n = old.len();
         debug_assert!(n >= 2);
@@ -495,113 +674,222 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
         }
         let at = at.max(1);
 
-        // The new fence is the shortest string separating the two pages
+        // The new separator is the shortest string separating the two pages
         let old_plen = old.plen();
         let (a, b) = (old.suffix(at - 1), old.suffix(at));
-        let mut fence = old.prefix().to_vec();
-        fence.extend_from_slice(&b[..lcp(a, b) + 1]);
-        let high = old.high_suffix().map(|suffix| {
-            let mut high = old.prefix().to_vec();
-            high.extend_from_slice(suffix);
-            high
-        });
+        let mut sep = old.prefix().to_vec();
+        sep.extend_from_slice(&b[..lcp(a, b) + 1]);
 
-        let (left, right) = self.pages.pair_mut(id, new);
-        left.reset(old.low(), Some(&fence));
+        let seg = self.segs.get_mut(id);
+        let (left, right) = self.pages.pair_mut(page, new_page);
+        left.reset(old.low(), Some(&sep));
         let delta = left.plen() - old_plen;
         for i in 0..at {
-            left.push(&old.suffix(i)[delta..], old.hash(i), old.is_out(i));
+            let off = left.push(&old.suffix(i)[delta..], old.hash(i), old.is_out(i));
+            seg.relocate(entries[i], slot, off);
         }
-        right.reset(&fence, high.as_deref());
+        right.reset(&sep, high.as_deref());
         let delta = right.plen() - old_plen;
         for i in at..n {
-            right.push(&old.suffix(i)[delta..], old.hash(i), old.is_out(i));
+            let off = right.push(&old.suffix(i)[delta..], old.hash(i), old.is_out(i));
+            seg.relocate(entries[i], new_slot, off);
         }
+        seg.insert_page(pos + 1, new_slot, new_page);
+        seg.set_blind(pos + 1, old.low(), &sep);
+        if let Some(high) = high.as_deref().filter(|_| pos + 2 < seg.npages()) {
+            seg.set_blind(pos + 2, &sep, high);
+        }
+        self.scratch.clear();
+    }
+
+    /// Returns the home position, the bits of hash, the slot and the offset
+    /// of the keys of the pages of a segment whose rank is in the given
+    /// interval.
+    fn keys_of(&self, id: u32, ranks: std::ops::Range<usize>) -> Vec<(u16, u32, usize, u16)> {
+        let seg = self.segs.get(id);
+        let mut keys = Vec::new();
+        for pos in ranks {
+            let slot = seg.slot(pos);
+            let page = self.pages.get(seg.page_in(slot));
+            for i in 0..page.len() {
+                let (home, off) = (page.hash(i), page.off(i));
+                keys.push((home, seg.tag(seg.entry(home, slot, off)), slot, off));
+            }
+        }
+        keys
+    }
+
+    /// Rebuilds the table of a segment, getting rid of deleted entries.
+    fn rebuild_table(&mut self, id: u32) {
+        let keys = self.keys_of(id, 0..self.segs.get(id).npages());
+        let seg = self.segs.get_mut(id);
+        seg.clear_table();
+        for (home, tag, slot, off) in keys {
+            seg.add(home, tag, slot, off);
+        }
+    }
+
+    /// Splits a segment with at least two pages, moving its last pages to a
+    /// new segment, which is returned.
+    fn split_segment(&mut self, id: u32) -> u32 {
+        let n = self.segs.get(id).npages();
+        debug_assert!(n >= 2);
+        let at = n / 2;
+        let keep = self.keys_of(id, 0..at);
+        let moved = self.keys_of(id, at..n);
+        let new = self.segs.alloc();
+        let (old, right) = self.segs.pair_mut(id, new);
+        let sep = self.pages.get(old.page(at)).low();
+        right.reset(sep, old.high());
+        // The slot of a moved page in the new segment is its rank
+        let mut new_slot = [0; MAX_PAGES];
+        for pos in at..n {
+            new_slot[old.slot(pos)] = pos - at;
+            right.insert_page(pos - at, pos - at, old.page(pos));
+            if pos > at {
+                right.copy_blind(pos - at, old, pos);
+            }
+        }
+        for (home, tag, slot, off) in moved {
+            right.add(home, tag, new_slot[slot], off);
+        }
+        right.rebuild_tree();
+        for pos in (at..n).rev() {
+            old.remove_page(pos);
+        }
+        old.clear_table();
+        for (home, tag, slot, off) in keep {
+            old.add(home, tag, slot, off);
+        }
+        old.set_high(Some(sep));
         let next = old.next;
-        left.prev = old.prev;
-        left.next = new;
         right.prev = id;
         right.next = next;
+        old.next = new;
         if next == NONE {
             self.last = new;
         } else {
-            self.pages.get_mut(next).prev = new;
+            self.segs.get_mut(next).prev = new;
         }
-        self.scratch.clear();
-        self.router.insert(new, id, next, &self.pages);
+        self.router.insert(new, id, next, &self.segs);
         new
     }
 
     /// Removes a key; returns true if the key was in the set.
     pub fn remove(&mut self, x: impl AsRef<[u8]>) -> bool {
         let x = x.as_ref();
-        let (id, h16) = self.locate(x, false);
-        let page = self.pages.get_mut(id);
-        let suffix = &x[page.plen()..];
-        let Some(slot) = page.find(suffix, h16) else {
+        let hasher = self.router.hasher(x);
+        let (home, tag) = home_tag(hasher.hash(x.len()));
+        let (id, found) = self.find(x, &hasher, home, tag, |s| s.prefetch_point(home));
+        let seg = self.segs.get(id);
+        let Some((slot, off)) = found else {
             return false;
         };
-        page.remove(slot, suffix);
+        let page = self.pages.get_mut(seg.page_in(slot));
+        page.remove(page.rank(off, &x[page.plen()..]));
+        let small = page.used() < MERGE_BYTES;
+        self.segs.get_mut(id).remove(home, slot, off);
         self.len -= 1;
-        if page.len() < MERGE_KEYS && page.used() < MERGE_BYTES {
-            let (prev, next) = (page.prev, page.next);
-            if !(prev != NONE && self.merge(prev, id)) && next != NONE {
-                self.merge(id, next);
-            }
+        if small {
+            self.shrink(id, slot);
         }
         true
     }
 
-    /// Moves the keys of the page `b`, which must follow the page `a`, to
-    /// the page `a`, and deletes `b`, if the result is not too large;
-    /// returns true if the pages were merged.
-    fn merge(&mut self, a: u32, b: u32) -> bool {
+    /// Tries to merge a page that has become small with a neighbor in the
+    /// same segment, or its segment with the previous one.
+    fn shrink(&mut self, id: u32, slot: usize) {
+        let seg = self.segs.get(id);
+        let n = seg.npages();
+        let pos = seg.rank_of(slot);
+        if (pos > 0 && self.merge_pages(id, pos - 1)) || (pos + 1 < n && self.merge_pages(id, pos))
+        {
+            return;
+        }
+        if n == 1 && id != FIRST {
+            self.merge_segment(id);
+        }
+    }
+
+    /// Moves the keys of the page of rank `pos` + 1 of a segment to the page
+    /// of rank `pos`, and deletes the former, if the result is not too
+    /// large; returns true if the pages were merged.
+    fn merge_pages(&mut self, id: u32, pos: usize) -> bool {
+        let high = self.high_of(id, pos + 1);
+        let seg = self.segs.get(id);
+        let (a_slot, b_slot) = (seg.slot(pos), seg.slot(pos + 1));
+        let (a, b) = (seg.page_in(a_slot), seg.page_in(b_slot));
         let (left, right) = (self.pages.get(a), self.pages.get(b));
-        debug_assert_eq!(left.next, b);
         let low = left.low();
-        let high = right.high_suffix().map(|suffix| {
-            let mut high = right.prefix().to_vec();
-            high.extend_from_slice(suffix);
-            high
-        });
         let plen = high.as_ref().map_or(0, |high| lcp(low, high));
-        let bytes = blob_size(low.len())
-            + high.as_ref().map_or(0, |high| blob_size(high.len() - plen))
-            + left.key_bytes_with(plen)
-            + right.key_bytes_with(plen);
-        if left.len() + right.len() > MERGED_KEYS || bytes > MERGED_BYTES {
+        let bytes = blob_size(low.len()) + left.key_bytes_with(plen) + right.key_bytes_with(plen);
+        if bytes > MERGED_BYTES {
             return false;
         }
 
-        let next = right.next;
-        self.router.remove(b, next, &self.pages);
+        let a_entries = self.entries(id, a_slot);
+        let b_entries = self.entries(id, b_slot);
         std::mem::swap(self.pages.get_mut(a), &mut *self.scratch);
         let old = &*self.scratch;
+        let seg = self.segs.get_mut(id);
         let (left, right) = self.pages.pair_mut(a, b);
         left.reset(old.low(), high.as_deref());
         debug_assert_eq!(left.plen(), plen);
         let mut suffix = Vec::new();
-        for page in [old, &*right] {
+        for (page, entries) in [(old, a_entries), (&*right, b_entries)] {
             // The part of the prefix of the page that is not shared any
             // longer
             let lost = &page.prefix()[plen..];
-            for i in 0..page.len() {
+            for (i, entry) in entries.into_iter().enumerate() {
                 suffix.clear();
                 suffix.extend_from_slice(lost);
                 suffix.extend_from_slice(page.suffix(i));
-                left.push(&suffix, page.hash(i), page.is_out(i));
+                let off = left.push(&suffix, page.hash(i), page.is_out(i));
+                seg.relocate(entry, a_slot, off);
             }
         }
-        left.prev = old.prev;
-        left.next = next;
-        if next == NONE {
-            self.last = a;
-        } else {
-            self.pages.get_mut(next).prev = a;
+        seg.remove_page(pos + 1);
+        if let Some(high) = high.as_deref().filter(|_| pos + 1 < seg.npages()) {
+            seg.set_blind(pos + 1, old.low(), high);
         }
         self.scratch.clear();
         self.pages.release(b);
         true
+    }
+
+    /// Moves the only page of a segment to the previous segment, and deletes
+    /// the segment, if the previous segment has room.
+    fn merge_segment(&mut self, id: u32) {
+        let seg = self.segs.get(id);
+        let prev = seg.prev;
+        let before = self.segs.get(prev);
+        if before.npages() == MAX_PAGES || before.keys() + seg.keys() > MERGED_KEYS {
+            return;
+        }
+        if before.is_dirty() || !before.has_room() {
+            return;
+        }
+        let keys = self.keys_of(id, 0..1);
+        let next = seg.next;
+        self.router.remove(id, next, &self.segs);
+        let (before, seg) = self.segs.pair_mut(prev, id);
+        let page = seg.page(0);
+        let n = before.npages();
+        let slot = before.free_slot();
+        let last = self.pages.get(before.page(n - 1)).low();
+        before.insert_page(n, slot, page);
+        before.set_blind(n, last, self.pages.get(page).low());
+        for (home, tag, _, off) in keys {
+            before.add(home, tag, slot, off);
+        }
+        before.set_high(seg.high());
+        before.next = next;
+        if next == NONE {
+            self.last = prev;
+        } else {
+            self.segs.get_mut(next).prev = prev;
+        }
+        self.segs.release(id);
     }
 
     /// Checks the invariants of the structure.
@@ -612,39 +900,53 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
     pub fn check(&self) {
         let mut order = Vec::new();
         let mut len = 0;
+        let mut pages = 0;
         let mut id = FIRST;
         let mut prev = NONE;
-        let mut high: Option<Vec<u8>> = Some(Vec::new());
         let mut last_key: Option<Vec<u8>> = None;
+        let mut low = Some(Vec::new());
         while id != NONE {
-            let page = self.pages.get(id);
-            page.check();
-            assert_eq!(page.prev, prev, "wrong link");
-            // The lower fence is the upper fence of the previous page
-            assert_eq!(Some(page.low()), high.as_deref(), "fences do not match");
-            high = page.high_suffix().map(|suffix| {
-                let mut high = page.prefix().to_vec();
-                high.extend_from_slice(suffix);
-                high
-            });
-            for i in 0..page.len() {
-                let key = page.key(i).to_vec();
-                assert!(last_key.as_ref().is_none_or(|last| *last < key));
-                let hash = self.router.hasher(&key).hash(key.len());
-                assert_eq!(page.hash(i), Self::hash16(hash), "wrong hash");
-                assert!(page.covers(&key));
-                last_key = Some(key);
+            let seg = self.segs.get(id);
+            assert_eq!(seg.prev, prev, "wrong link");
+            // The lower fence is the upper fence of the previous segment
+            assert_eq!(Some(seg.low()), low.as_deref(), "fences do not match");
+            low = seg.high().map(<[u8]>::to_vec);
+            seg.check(&self.pages);
+            let mut keys = 0;
+            for pos in 0..seg.npages() {
+                let slot = seg.slot(pos);
+                let page = self.pages.get(seg.page_in(slot));
+                let high = self.high_of(id, pos);
+                page.check(high.as_deref());
+                assert!(seg.covers(page.low()));
+                for i in 0..page.len() {
+                    let key = page.key(i).to_vec();
+                    assert!(last_key.as_ref().is_none_or(|last| *last < key));
+                    assert!(seg.covers(&key));
+                    assert_eq!(seg.locate(&key, seg.candidate(&key), &self.pages), pos);
+                    let (home, tag) = home_tag(self.router.hasher(&key).hash(key.len()));
+                    assert_eq!(page.hash(i), home, "wrong hash");
+                    let off = page.off(i);
+                    assert_eq!(seg.tag(seg.entry(home, slot, off)), tag);
+                    assert!(page.is(off, &key));
+                    assert!(seg.probe(home, tag, |s, o| (s, o) == (slot, off)));
+                    last_key = Some(key);
+                }
+                keys += page.len();
             }
-            len += page.len();
+            assert_eq!(keys, seg.keys());
+            len += keys;
+            pages += seg.npages();
             order.push(id);
             prev = id;
-            id = page.next;
+            id = seg.next;
         }
-        assert_eq!(high, None, "the last page has an upper fence");
+        assert_eq!(low, None, "the last segment has an upper fence");
         assert_eq!(prev, self.last);
         assert_eq!(len, self.len);
-        assert_eq!(order.len(), self.pages.len());
-        self.router.check(&order, &self.pages);
+        assert_eq!(pages, self.pages.len());
+        assert_eq!(order.len(), self.segs.len());
+        self.router.check(&order, &self.segs);
     }
 }
 
@@ -683,9 +985,9 @@ impl<'a, H: HashPrefixes> IntoIterator for &'a ZFastPagedSet<H> {
 pub struct Iter<'a, H> {
     set: &'a ZFastPagedSet<H>,
     /// The position of the next key.
-    front: (u32, usize),
+    front: Pos,
     /// The position after the next key from the back.
-    back: (u32, usize),
+    back: Pos,
     remaining: usize,
 }
 
@@ -698,9 +1000,9 @@ impl<'a, H: HashPrefixes> Iterator for Iter<'a, H> {
             return None;
         }
         self.remaining -= 1;
-        let (id, pos) = self.set.forward(self.front.0, self.front.1)?;
-        self.front = (id, pos + 1);
-        Some(self.set.pages.get(id).key(pos))
+        let (id, page, key) = self.set.forward(self.front)?;
+        self.front = (id, page, key + 1);
+        self.set.key_at(Some((id, page, key)))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -715,9 +1017,8 @@ impl<H: HashPrefixes> DoubleEndedIterator for Iter<'_, H> {
             return None;
         }
         self.remaining -= 1;
-        let (id, pos) = self.set.backward(self.back.0, self.back.1)?;
-        self.back = (id, pos);
-        Some(self.set.pages.get(id).key(pos))
+        self.back = self.set.backward(self.back)?;
+        self.set.key_at(Some(self.back))
     }
 }
 
@@ -728,6 +1029,52 @@ impl<H: HashPrefixes> std::iter::FusedIterator for Iter<'_, H> {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_segments() {
+        // Enough keys to split segments, with long common prefixes and
+        // keys that are prefixes of other keys
+        let mut set = <ZFastPagedSet>::new();
+        let n = if cfg!(miri) { 4000 } else { 60000 };
+        let key = |i: usize| {
+            let j = (i * 7919) % n;
+            format!(
+                "{}/{:06}{}",
+                "p".repeat(j % 7 * 20),
+                j / 3,
+                "x".repeat(j % 3 * 9)
+            )
+        };
+        for i in 0..n {
+            assert!(set.insert(key(i)), "{}", key(i));
+            if i % 7001 == 0 {
+                set.check();
+            }
+        }
+        set.check();
+        assert!(set.num_segments() > 1);
+        assert_eq!(set.iter().count(), n);
+        for i in (0..n).step_by(7) {
+            let k = key(i);
+            assert!(set.contains(&k));
+            assert!(!set.contains(format!("{k}y")));
+            assert!(set.succ(&k).unwrap() == k.as_bytes());
+            assert!(set.pred(&k).unwrap() == k.as_bytes());
+            assert!(set.pred(format!("{k}\0")).unwrap() == k.as_bytes());
+        }
+        // Deletions in a different order, so that pages and segments are
+        // merged
+        for i in 0..n {
+            let i = (i * 104729) % n;
+            assert!(set.remove(key(i)));
+            if i % 7001 == 0 {
+                set.check();
+            }
+        }
+        assert!(set.is_empty());
+        assert_eq!(set.num_segments(), 1);
+        set.check();
+    }
 
     #[test]
     fn test_split_merge() {

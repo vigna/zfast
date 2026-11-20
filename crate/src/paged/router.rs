@@ -5,33 +5,34 @@
  */
 
 //! The router of a [paged set](super::ZFastPagedSet): a z-fast trie on the
-//! lower fences of the pages.
+//! lower fences of the segments.
 //!
-//! The router is a compacted trie whose leaves are the pages, endowed with a
-//! z-map from the signatures of the handles of the internal nodes to the
-//! nodes. With respect to the [dynamic z-fast trie](crate::ZFastTrie), there
-//! are three differences, all due to the fact that the router is modified only
-//! when a page is created or deleted, whereas it is queried by every
-//! operation:
+//! The router is a compacted trie whose leaves are the segments (below
+//! called *pages*, for historical reasons: the router does not depend on
+//! what its leaves are), endowed with a z-map from the signatures of the
+//! handles of the internal nodes to the nodes. With respect to the [dynamic
+//! z-fast trie](crate::ZFastTrie), there are three differences, all due to
+//! the fact that the router is modified only when a segment is created or
+//! deleted, whereas it is queried by every operation:
 //!
 //! - The router does not store strings: the extent of a node is a prefix of
-//!   the lower fence of each page below the node, and that is where we read
-//!   it when we update the trie. In particular, *queries never access the
-//!   bytes of an extent*: a fat binary search based on signatures provides
-//!   a node, from which we derive at most two candidate pages, and it is the
-//!   page that tells us, using its fences, whether it is the right one. If no
-//!   candidate is, we fall back to an exact search.
+//!   the lower fence of each segment below the node, and that is where we
+//!   read it when we update the trie. In particular, *queries never access
+//!   the bytes of an extent*: a fat binary search based on signatures
+//!   provides a node, from which we derive at most two candidate segments,
+//!   and it is the segment that tells us, using its fences, whether it is
+//!   the right one. If no candidate is, we fall back to an exact search.
 //!
-//! - Each internal node stores the first and the last page of its subtree,
-//!   and the page preceding the first one, instead of jump pointers: thus,
-//!   the candidate pages are known as soon as the node is known. These
-//!   fields are updated by walking up the trie.
+//! - Each internal node stores the first and the last leaf of its subtree,
+//!   and the leaf preceding the first one, instead of jump pointers: thus,
+//!   the candidates are known as soon as the node is known. These fields are
+//!   updated by walking up the trie.
 //!
 //! - Besides the signature of its handle (in the z-map), each node stores a
 //!   signature of its extent, which makes it possible to guess whether the
 //!   extent is a prefix of the string we are looking for.
 
-use super::page::{NONE, Pages};
+use super::page::NONE;
 use crate::dynamic::map::HandleMap;
 use crate::utils::{HashPrefixes, PrefixHasher, fat_binary_search, lcp, lcp_from, two_fattest};
 use std::marker::PhantomData;
@@ -46,6 +47,12 @@ const INLINE: usize = 6;
 const BIG: u8 = u8::MAX;
 /// The default seed.
 const SEED: u64 = 0x05EE_D0F2_FA57;
+
+/// A source of the strings associated with the leaves of the router.
+pub(super) trait Anchors {
+    /// Returns the string associated with a leaf.
+    fn low(&self, id: u32) -> &[u8];
+}
 
 #[inline(always)]
 const fn is_leaf(id: u32) -> bool {
@@ -380,7 +387,7 @@ impl<H: HashPrefixes> Router<H> {
     /// Returns the page containing `x`, that is, the page with the largest
     /// lower fence that is not larger than `x`, by walking down the trie and
     /// comparing `x` with the extents.
-    pub(super) fn locate(&self, x: &[u8], pages: &Pages) -> u32 {
+    pub(super) fn locate(&self, x: &[u8], pages: &impl Anchors) -> u32 {
         if is_leaf(self.root) {
             return self.root & !LEAF;
         }
@@ -601,7 +608,7 @@ impl<H: HashPrefixes> Router<H> {
 
     /// Adds a page, whose lower fence must have been set, between the pages
     /// `prev` and `next` (the latter can be [`NONE`]).
-    pub(super) fn insert(&mut self, page: u32, prev: u32, next: u32, pages: &Pages) {
+    pub(super) fn insert(&mut self, page: u32, prev: u32, next: u32, pages: &impl Anchors) {
         if self.links.len() <= page as usize {
             self.links.resize(
                 page as usize + 1,
@@ -716,7 +723,7 @@ impl<H: HashPrefixes> Router<H> {
 
     /// Removes a page, which must not be the first one, and whose lower fence
     /// must still be set; `next` is the following page, or [`NONE`].
-    pub(super) fn remove(&mut self, page: u32, next: u32, pages: &Pages) {
+    pub(super) fn remove(&mut self, page: u32, next: u32, pages: &impl Anchors) {
         let Link { parent, prev } = self.links[page as usize];
         debug_assert!(parent != NONE && prev != NONE);
         let a = pages.low(page);
@@ -775,7 +782,7 @@ impl<H: HashPrefixes> Router<H> {
     // Invariants
 
     /// Checks the invariants of the router, given the pages in order.
-    pub(super) fn check(&self, order: &[u32], pages: &Pages) {
+    pub(super) fn check(&self, order: &[u32], pages: &impl Anchors) {
         let mut rank = vec![usize::MAX; self.links.len()];
         for (i, &page) in order.iter().enumerate() {
             rank[page as usize] = i;
@@ -797,7 +804,7 @@ impl<H: HashPrefixes> Router<H> {
         parent: u32,
         name_len: usize,
         rank: &[usize],
-        pages: &Pages,
+        pages: &impl Anchors,
         handles: &mut usize,
     ) -> usize {
         if is_leaf(id) {

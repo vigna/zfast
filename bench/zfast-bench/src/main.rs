@@ -192,30 +192,35 @@ fn run_paged<H: HashPrefixes>(
     r.time("insert", 1, keys, |k| set.insert(k) as usize);
     r.space(keys.len(), set.mem_size(), rss().saturating_sub(before));
     eprintln!(
-        "{} pages, {:.1} keys per page, router: {:.1} bytes per page",
-        set.num_pages(),
+        "{} segments, {:.1} pages per segment, {:.1} keys per page, router: {:.1} bytes per segment",
+        set.num_segments(),
+        set.num_pages() as f64 / set.num_segments() as f64,
         set.len() as f64 / set.num_pages() as f64,
-        set.router_mem_size() as f64 / set.num_pages() as f64
+        set.router_mem_size() as f64 / set.num_segments() as f64
     );
     if std::env::var("ZFAST_STATS").is_ok() {
-        // How many candidate pages the router proposes, and which one is
-        // the right one
+        // How many candidate segments the router proposes, and which one
+        // is the right one
         for (name, queries) in [("hits", hits), ("misses", misses)] {
             let mut counts = [[0_usize; 3]; 3];
             for q in queries.iter() {
                 let (n, which) = set.locate_stats(q);
                 counts[n][which.map_or(2, |i| i)] += 1;
             }
-            eprintln!("{name}: candidates x (first, second, none): {counts:?}");
+            let first = queries.iter().filter(|q| set.page_stats(q).1).count();
+            eprintln!(
+                "{name}: candidates x (first, second, none): {counts:?}; first page right: {first}"
+            );
         }
     }
     if std::env::var("ZFAST_STATS").is_ok() {
-        // The cost of the router alone, and of the router followed by the
-        // check of the fences
+        // The cost of the router alone, and of finding the page
         r.time("route-hit", r.reps, hits, |k| set.route(k) as usize);
         r.time("route-miss", r.reps, misses, |k| set.route(k) as usize);
-        r.time("page-hit", r.reps, hits, |k| set.page_of(k) as usize);
-        r.time("page-miss", r.reps, misses, |k| set.page_of(k) as usize);
+        r.time("page-hit", r.reps, hits, |k| set.page_stats(k).0 as usize);
+        r.time("page-miss", r.reps, misses, |k| {
+            set.page_stats(k).0 as usize
+        });
     }
     r.time("contains-hit", r.reps, hits, |k| set.contains(k) as usize);
     r.time("contains-miss", r.reps, misses, |k| {

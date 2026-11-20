@@ -92,7 +92,8 @@ def cmd_bench(args):
     targets = ["build/zfast-bench"] + (["build/wh_bench"] if "wormhole" in tools else [])
     targets += ["build/art_bench"] if "art" in tools else []
     targets += sorted({"build/bt_bench-" + METHODS[m]["arg"] for m in names if METHODS[m]["tool"] == "btree-cpp"})
-    run(["make", "-C", HERE] + targets, args.dry_run)
+    if not args.no_build:
+        run(["make", "-C", HERE] + targets, args.dry_run)
     pin = shlex.split(args.pin) if args.pin else []
     for dataset in args.dataset.split(","):
         for n in [int(x) for x in args.n.split(",")]:
@@ -232,6 +233,8 @@ def main():
                                 "workloads and results are then stored under the name DATASET.qQUERIES")
             p.add_argument("--pin", default="", help='a command prefix pinning the CPU, e.g. "taskset -c 8"')
             p.add_argument("--force", action="store_true", help="rerun existing results")
+            p.add_argument("--no-build", action="store_true",
+                           help="do not build the drivers (necessary when running several instances in parallel)")
             p.add_argument("--force-gen", action="store_true", help="regenerate existing workloads")
             p.add_argument("--dry-run", action="store_true", help="show the commands without running them")
     args = parser.parse_args()
