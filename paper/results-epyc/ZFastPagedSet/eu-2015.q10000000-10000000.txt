@@ -1,0 +1,8 @@
+RESULT method=zpaged op=insert n=5000000 ns=665.4 checksum=5000000
+SPACE method=zpaged n=5000000 bytes_per_key=109.1 rss_per_key=109.5
+RESULT method=zpaged op=contains-hit n=5000000 ns=357.0 checksum=5000000
+RESULT method=zpaged op=contains-miss n=5000000 ns=148.5 checksum=0
+RESULT method=zpaged op=succ-hit n=5000000 ns=392.7 checksum=376866160
+RESULT method=zpaged op=succ-miss n=5000000 ns=654.4 checksum=376940326
+RESULT method=zpaged op=iterate n=5000000 ns=10.5 checksum=376866160
+RESULT method=zpaged op=remove n=5000000 ns=521.5 checksum=5000000

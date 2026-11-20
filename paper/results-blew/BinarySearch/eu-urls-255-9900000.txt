@@ -1,0 +1,5 @@
+SPACE method=bsearch n=4950000 bytes_per_key=0.0 rss_per_key=0.0
+RESULT method=bsearch op=contains-hit n=4950000 ns=974.9 checksum=4950000
+RESULT method=bsearch op=contains-miss n=4950000 ns=967.9 checksum=0
+RESULT method=bsearch op=succ-hit n=4950000 ns=970.2 checksum=373014637
+RESULT method=bsearch op=succ-miss n=4950000 ns=966.4 checksum=373063279

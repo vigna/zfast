@@ -1,0 +1,8 @@
+RESULT method=zset op=insert n=4950000 ns=998.6 checksum=4950000
+SPACE method=zset n=4950000 bytes_per_key=117.4 rss_per_key=128.5
+RESULT method=zset op=contains-hit n=4950000 ns=686.3 checksum=4950000
+RESULT method=zset op=contains-miss n=4950000 ns=456.3 checksum=0
+RESULT method=zset op=succ-hit n=4950000 ns=677.5 checksum=373014637
+RESULT method=zset op=succ-miss n=4950000 ns=956.3 checksum=373063279
+RESULT method=zset op=iterate n=4950000 ns=15.9 checksum=373014637
+RESULT method=zset op=remove n=4950000 ns=886.7 checksum=4950000

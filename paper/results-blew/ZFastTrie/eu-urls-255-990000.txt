@@ -1,0 +1,8 @@
+RESULT method=zft op=insert n=495000 ns=606.5 checksum=495000
+SPACE method=zft n=495000 bytes_per_key=188.3 rss_per_key=169.5
+RESULT method=zft op=contains-hit n=495000 ns=518.1 checksum=495000
+RESULT method=zft op=contains-miss n=495000 ns=449.2 checksum=0
+RESULT method=zft op=succ-hit n=495000 ns=516.1 checksum=37292654
+RESULT method=zft op=succ-miss n=495000 ns=581.5 checksum=37309573
+RESULT method=zft op=iterate n=495000 ns=39.4 checksum=37292654
+RESULT method=zft op=remove n=495000 ns=778.5 checksum=495000

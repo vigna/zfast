@@ -1,0 +1,8 @@
+RESULT method=wormhole op=insert n=5000000 ns=437.9 checksum=5000000
+SPACE method=wormhole n=5000000 bytes_per_key=0.0 rss_per_key=131.3
+RESULT method=wormhole op=contains-hit n=5000000 ns=304.9 checksum=5000000
+RESULT method=wormhole op=contains-miss n=5000000 ns=164.2 checksum=0
+RESULT method=wormhole op=succ-hit n=5000000 ns=337.9 checksum=376866160
+RESULT method=wormhole op=succ-miss n=5000000 ns=965.6 checksum=376940326
+RESULT method=wormhole op=iterate n=5000000 ns=10.1 checksum=376866160
+RESULT method=wormhole op=remove n=5000000 ns=384.2 checksum=5000000

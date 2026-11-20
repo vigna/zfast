@@ -30,10 +30,37 @@
  * - a deletion requires the tuple identifier, so it is preceded by a lookup.
  */
 
+/*
+ * If ART_UNSYNC is defined, the driver uses instead the unsynchronized
+ * version of the same repository, which has no range scan: the phases based
+ * on scans (successor queries and the iteration) are then skipped. We use it
+ * to check how much the synchronization costs on a single thread.
+ */
+
+#ifdef ART_UNSYNC
+#define METHOD "art-unsync"
+#else
 #define METHOD "art"
+#endif
 #include "harness.hpp"
 
+#ifdef ART_UNSYNC
+#include "ART/Tree.h"
+/* The unsynchronized tree has the same methods, without the last argument */
+struct Unsync {
+	ART_unsynchronized::Tree tree;
+	Unsync(ART_unsynchronized::Tree::LoadKeyFunction f) : tree(f) {}
+	void insert(const Key &k, TID tid, int) { tree.insert(k, tid); }
+	TID lookup(const Key &k, int) { return tree.lookup(k); }
+	void remove(const Key &k, TID tid, int) { tree.remove(k, tid); }
+};
+typedef Unsync Tree;
+typedef int Info;
+#else
 #include "OptimisticLockCoupling/Tree.h"
+typedef ART_OLC::Tree Tree;
+typedef ART::ThreadInfo Info;
+#endif
 
 /* A tuple: a key preceded by its length. */
 struct Tuple {
@@ -46,8 +73,8 @@ static void load_key(TID tid, Key &key) {
 	key.set(reinterpret_cast<const char *>(t->key), t->len);
 }
 
-static ART_OLC::Tree *tree;
-static ART::ThreadInfo *info;
+static Tree *tree;
+static Info *info;
 
 /* The operations: each one returns a value that is added to the checksum. */
 
@@ -69,6 +96,7 @@ static size_t op_contains(uint8_t *key, uint32_t len) {
 
 /* Returns the length of the smallest key greater than or equal to the given
  * one (without the final zero), or zero if there is no such key. */
+#ifndef ART_UNSYNC
 static size_t op_succ(uint8_t *key, uint32_t len) {
 	Key k;
 	k.set(reinterpret_cast<const char *>(key), len);
@@ -83,6 +111,8 @@ static size_t op_succ(uint8_t *key, uint32_t len) {
 	}
 	return 0;
 }
+
+#endif
 
 static size_t op_remove(uint8_t *key, uint32_t len) {
 	Key k;
@@ -105,14 +135,19 @@ int main(int argc, char **argv) {
 	std::vector<TID> all(keys.n + 1);
 
 	const size_t before = rss();
-	tree = new ART_OLC::Tree(load_key);
-	ART::ThreadInfo thread_info = tree->getThreadInfo();
+	tree = new Tree(load_key);
+#ifdef ART_UNSYNC
+	Info thread_info = 0;
+#else
+	Info thread_info = tree->getThreadInfo();
+#endif
 	info = &thread_info;
 	run("insert", 1, keys, op_insert);
 	space(keys.n, rss() - before);
 
 	run("contains-hit", reps, hits, op_contains);
 	run("contains-miss", reps, misses, op_contains);
+#ifndef ART_UNSYNC
 	run("succ-hit", reps, hits, op_succ);
 	run("succ-miss", reps, misses, op_succ);
 
@@ -124,6 +159,7 @@ int main(int argc, char **argv) {
 	tree->lookupRange(first, all.data(), all.size(), count, *info);
 	for (size_t i = 0; i < count; i++) sum += reinterpret_cast<const Tuple *>(all[i])->len - 1;
 	result("iterate", keys.n, (now() - start) / keys.n, sum);
+#endif
 
 	run("remove", 1, hits, op_remove);
 	return 0;

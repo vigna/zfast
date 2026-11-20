@@ -11,7 +11,7 @@ Comparative benchmarks of z-fast tries.
 
 `bench` builds the drivers, generates the workload if necessary (in
 bench/data), runs each method and stores its raw output in
-bench/results/<method>/<dataset>-<n>.out; existing results are kept unless
+bench/results/<method>/<dataset>-<n>.txt; existing results are kept unless
 --force is given, so a campaign can be interrupted and resumed. A dataset is a
 name defined in configs.py or the name of a file in bench/data with one key
 per line. `report` prints a table with the time in nanoseconds per operation
@@ -83,7 +83,10 @@ def workload(dataset, n, args):
 
 
 def result_file(method, dataset, n, results=None):
-    return os.path.join(results or RESULTS, method, f"{dataset}-{n}.out")
+    """Returns the name of the file with the results of a data point (a text
+    file; files with the extension used by older versions are still read)."""
+    name = os.path.join(results or RESULTS, method, f"{dataset}-{n}")
+    return name + ".out" if os.path.exists(name + ".out") and not os.path.exists(name + ".txt") else name + ".txt"
 
 
 def cmd_bench(args):
@@ -142,7 +145,7 @@ def cmd_report(args):
     for dataset in args.dataset.split(","):
         sizes = sorted({int(m.group(1)) for name in names if os.path.isdir(os.path.join(base, name))
                         for f in os.listdir(os.path.join(base, name))
-                        if (m := re.fullmatch(re.escape(dataset) + r"-(\d+)\.out", f))})
+                        if (m := re.fullmatch(re.escape(dataset) + r"-(\d+)\.(?:txt|out)", f))})
         for n in sizes:
             results = {name: parse(result_file(name, dataset, n, base)) for name in names
                        if os.path.exists(result_file(name, dataset, n, base))}
