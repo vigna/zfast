@@ -81,6 +81,14 @@ impl<'a> PagedKey<'a> {
     }
 }
 
+impl PartialEq for PagedKey<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.bytes().eq(other.bytes())
+    }
+}
+
+impl Eq for PagedKey<'_> {}
+
 impl PartialEq<[u8]> for PagedKey<'_> {
     fn eq(&self, other: &[u8]) -> bool {
         self.cmp_bytes(other) == Ordering::Equal
@@ -684,15 +692,15 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
         let (left, right) = self.pages.pair_mut(page, new_page);
         left.reset(old.low(), Some(&sep));
         let delta = left.plen() - old_plen;
-        for i in 0..at {
+        for (i, &entry) in entries.iter().enumerate().take(at) {
             let off = left.push(&old.suffix(i)[delta..], old.hash(i), old.is_out(i));
-            seg.relocate(entries[i], slot, off);
+            seg.relocate(entry, slot, off);
         }
         right.reset(&sep, high.as_deref());
         let delta = right.plen() - old_plen;
-        for i in at..n {
+        for (i, &entry) in entries.iter().enumerate().skip(at) {
             let off = right.push(&old.suffix(i)[delta..], old.hash(i), old.is_out(i));
-            seg.relocate(entries[i], new_slot, off);
+            seg.relocate(entry, new_slot, off);
         }
         seg.insert_page(pos + 1, new_slot, new_page);
         seg.set_blind(pos + 1, old.low(), &sep);

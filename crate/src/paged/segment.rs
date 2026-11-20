@@ -667,7 +667,7 @@ impl Segment {
     pub(super) fn check(&self, pages: &Slab<Page>) {
         assert!(self.init);
         let n = self.npages as usize;
-        assert!(n >= 1 && n <= MAX_PAGES);
+        assert!((1..=MAX_PAGES).contains(&n));
         assert_eq!(self.slots.count_ones() as usize, n);
         let mut seen = 0_u64;
         for pos in 0..n {

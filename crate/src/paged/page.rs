@@ -603,9 +603,10 @@ impl Page {
         }
         let mut live = self.raw_size(self.low);
         let slots = self.slots();
-        for i in 0..count {
+        debug_assert_eq!(slots.len(), count);
+        for (i, slot) in slots.iter().enumerate() {
             let suffix = self.suffix(i);
-            assert_eq!(slots[i].head, head_of(suffix));
+            assert_eq!(slot.head, head_of(suffix));
             assert!(suffix >= &low[plen..], "key below the separator");
             if let Some(high) = high {
                 assert!(suffix < &high[plen..], "key above the next separator");
@@ -613,9 +614,9 @@ impl Page {
             if i > 0 {
                 assert!(self.suffix(i - 1) < suffix, "keys out of order");
             }
-            live += self.raw_size(slots[i].off) + SLOT_LEN;
+            live += self.raw_size(slot.off) + SLOT_LEN;
             assert_eq!(self.lower_bound(suffix), (i, true));
-            assert_eq!(self.rank(slots[i].off, suffix), i);
+            assert_eq!(self.rank(slot.off, suffix), i);
         }
         assert_eq!(live, self.used(), "wrong accounting");
     }
