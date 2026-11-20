@@ -1,0 +1,8 @@
+RESULT method=adapt2 op=insert n=1000000000 ns=1036.6 checksum=1000000000
+SPACE method=adapt2 n=1000000000 bytes_per_key=0.0 rss_per_key=95.6
+RESULT method=adapt2 op=contains-hit n=10000000 ns=1266.0 checksum=10000000
+RESULT method=adapt2 op=contains-miss n=10000000 ns=1059.9 checksum=0
+RESULT method=adapt2 op=succ-hit n=10000000 ns=1707.4 checksum=753696948
+RESULT method=adapt2 op=succ-miss n=10000000 ns=1689.2 checksum=753776888
+RESULT method=adapt2 op=iterate n=1000000000 ns=10.7 checksum=75372291688
+RESULT method=adapt2 op=remove n=10000000 ns=1671.4 checksum=10000000

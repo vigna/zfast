@@ -419,6 +419,29 @@ What the tables say about `ZFastPagedSet`:
 Read together with Section 4: these margins come from the segments and the
 pages, not from the router.
 
+**A billion URLs** (all the URLs of at most 255 bytes of the crawl; a
+different sample from the previous sizes, generated with `zfast-bench stream`
+because `gen` needs about 300 GB of memory at this size; one structure at a
+time)
+
+| | add | cont.⁺ | cont.⁻ | succ⁺ | succ⁻ | scan | del | RSS B/key |
+|---|---|---|---|---|---|---|---|---|
+| `ZFastPagedSet` | 1097 | 589 | 447 | 626 | 1042 | 8.3 | 879 | 79 |
+| Wormhole | 1105 | 586 | 515 | 652 | 1403 | 23.7 | 1362 | 125 |
+| Wormhole, 256 keys per leaf | 1044 | 552 | 479 | 669 | 1478 | 15.3 | 1402 | 124 |
+| adaptive B-tree | 1037 | 1266 | 1060 | 1707 | 1689 | 10.7 | 1671 | 96 |
+| HOT | 1133 | 863 | 847 | 934 | 1043 | 46.5 | | 105 |
+| ART | 1807 | 1940 | 1788 | 3616 | 3646 | 87.3 | 2445 | 132 |
+
+The same picture as at 500 million keys, with slightly different margins:
+`ZFastPagedSet` leads on unsuccessful membership (7%), on the successor of a
+key in the set (4%), on scans (22%), on deletion (35%) and on memory (17%),
+ties with HOT on unsuccessful successors, and loses successful membership to
+Wormhole with large leaves (6%) and insertions to the B-tree (5%). From 500
+million to a billion keys all structures slow down by a similar amount (6-15%
+the paged set, 6-22% Wormhole with large leaves, 8-16% the B-tree, 6-10% HOT),
+so at this scale the differences are those of the constant factors.
+
 **A billion random 64-bit integers** (keys of eight bytes; memory includes the
 keys)
 

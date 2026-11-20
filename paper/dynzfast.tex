@@ -2647,8 +2647,8 @@ accesses hash-table entries and nodes of bounded size, and compares the query wi
 \subsection{A byte-oriented implementation in Rust}
 \label{sec:rust}
 
-\todo[inline]{This section reports measurements on a single data set of strings; a billion random integers and a billion URLs 
-have been measured, too, but are not reported yet. Tables~\ref{tab:rustdyn5}--\ref{tab:ruststat500} are generated from the results in \texttt{results-epyc-tuned} 
+\todo[inline]{This section reports measurements on a single data set of strings; a billion random integers 
+have been measured, too (\texttt{ZFastPagedSet} leads only on unsuccessful membership queries there), but are not reported yet. Tables~\ref{tab:rustdyn5}--\ref{tab:ruststat500} are generated from the results in \texttt{results-epyc-tuned} 
 by the benchmark framework distributed with the code.}
 
 We also provide a new implementation in Rust\todo{LINK}, based on the \texttt{sux} crate, whose design 
@@ -2749,7 +2749,7 @@ by the accesses to a node, a leaf and a key. Scans are much slower, as consecuti
 The bucketed structure answers membership queries for strings not in the set faster ($640$\,ns against $780$\,ns), but its lookups are 
 two to three times slower than those of Wormhole, which has the same organization. \texttt{ZFastPagedSet} supersedes it.
 
-\paragraph{Pages and segments.} Tables~\ref{tab:rustdyn5},~\ref{tab:rustdyn50} and~\ref{tab:rustdyn500} compare \texttt{ZFastPagedSet} with the four best competitors. 
+\paragraph{Pages and segments.} Tables~\ref{tab:rustdyn5}--\ref{tab:rustdyn1000} compare \texttt{ZFastPagedSet} with the four best competitors. 
 On $5$ million keys it is not competitive on insertions and on successful lookups: Wormhole takes about a third less time on both, and the B-tree $46$\% less on insertions. 
 On $50$ million keys it is the fastest structure on deletions and the smallest one, and it is within $5$\% of the best (HOT) on successor queries for strings not in the set;
 Wormhole with large leaves is the fastest on lookups, and the B-tree on insertions. 
@@ -2759,6 +2759,11 @@ which is the smallest competitor; it is as fast as HOT on successor queries for 
 and the B-tree is $11$\% faster on insertions. 
 In other words, at this size it is the only structure within $12$\% of the best on every operation, but its margins on queries are small. 
 From $50$ to $500$ million keys its timings grow by $19$--$39$\%, those of Wormhole with large leaves by $17$--$78$\%, and those of the B-tree by $26$--$75$\%.
+On a billion keys (all the URLs of the crawl of at most $255$ bytes) the picture is the same, with slightly different margins: 
+\texttt{ZFastPagedSet} takes $7$\% less time than the best competitor on membership queries for strings not in the set, $4$\% less on successor queries for keys in the set, 
+$22$\% less on scans and $35$\% less on deletions, it uses $17$\% less memory, and it is again as fast as HOT on successor queries for strings not in the set; 
+Wormhole with large leaves is $6$\% faster on successful membership queries, and the B-tree is $5$\% faster on insertions. 
+On this set ART, which we could not include in the previous one, takes from $1.6$ to $4$ times the time of \texttt{ZFastPagedSet} on insertions, deletions and membership queries, and it is ten times slower on scans.
 
 \paragraph{The r\^ole of the z-fast trie.} To understand how much of this behaviour depends on the router, we extracted the fences of the segments 
 of a set and measured the time each structure takes to find the fence preceding a query, that is, the time it would take as top level of the set. 
@@ -2810,6 +2815,14 @@ which have an average length of $79$ bytes.}
 \centering
 \input{fig/bench-dynamic-1000000000}
 \caption{\label{tab:rustdyn500}Timings in nanoseconds for basic operations on a set of $500$ million URLs from the \texttt{eu-2015} crawl; see Table~\ref{tab:rustdyn5}.}
+\end{table}
+
+\begin{table}
+\renewcommand{\arraystretch}{1.2}
+\setlength{\tabcolsep}{6pt}
+\centering
+\input{fig/bench-dynamic-2000000000}
+\caption{\label{tab:rustdyn1000}Timings in nanoseconds for basic operations on a set of one billion URLs from the \texttt{eu-2015} crawl; see Table~\ref{tab:rustdyn5}.}
 \end{table}
 
 \begin{table}
