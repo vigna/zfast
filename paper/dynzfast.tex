@@ -293,6 +293,13 @@ and~\ref{th:fatanc})
 highlight a deep connection between jump pointers and fat
 binary search that makes it possible to update the additional pointers quickly.
 
+Finally, we show that fat binary search is not inherently sequential, in spite of its definition: the 
+queries to the z-map performed during the search for a string $x$ are chosen along a branch of a binary tree that depends only on $|x|$ (Theorem~\ref{th:probetree}).
+Thus, if $2^s-1$ queries can be performed in parallel, the exit node of $x$ can be located in $\bigl\lceil(\lfloor\lg|x|\rfloor+2)/s\bigr\rceil+O(1)$ rounds 
+(Theorem~\ref{th:rounds}), without any modification to the data structure. This is the trade-off between parallelism and time
+that x-fast tries provide by storing all prefixes of all keys, and that has been recently shown to be essentially optimal~\cite{Afshani2025Cell}; 
+structures that are traversed by following pointers do not provide it.
+
 \noindent\textbf{Results.} Given a prefix-free set $S$ of $n$ binary
 strings, we let
 \begin{align*}
@@ -509,6 +516,23 @@ The static z-fast trie~\cite{BBPMMPH,Belazzougui2010Fast}, which was developed i
 The bounds of Ru\v{z}i\'c for predecessor search are the same as those of Theorem~\ref{th:boundslong} for membership, and they 
 are better than ours when the predecessor or the successor of the query are much longer than the query; on the other hand, his structure is 
 static, recursive and uses buckets.
+
+\paragraph{Parallel and non-adaptive predecessor search.} A data structure is \emph{non-adaptive} if the cells accessed by a 
+query depend only on the query, and not on the content of the cells accessed previously. Predecessor search on $\ell$-bit integers 
+is the standard example of a problem in which adaptivity can be traded for accesses: an x-fast trie can access the entries associated with all the prefixes of the query 
+at the same time, performing $\ell$ accesses in a constant number of rounds instead of $O(\lg\ell)$ accesses, each depending on the previous one. 
+Lower bounds for dynamic predecessor search in which both queries and updates are non-adaptive 
+have been proved by Boninger, Brody and Kephart~\cite{Boninger2017Nonadaptive}: for example, when $n\geq w/2$ either queries or updates must access 
+$\Omega(\lg u/\lg w)$ cells of $w$ bits, where $u$ is the size of the universe. In the static case, even a dictionary using a linear number of cells
+must access $\Omega(\lg u)$ of them if $u\geq n^{1+\epsilon}$ for some $\epsilon>0$ and $w=\Theta(\lg u)$~\cite{Larsen2024Optimal}, whereas 
+a single round of adaptivity, in which the description of a hash function is read, brings the number of accesses down to a constant. 
+Afshani and Sitchinava~\cite{Afshani2025Cell} study the intermediate case in which a query is answered in $t$ rounds of $K$ parallel accesses, 
+which models a PRAM with $K$ processors: they observe that x-fast and y-fast tries, combined with known results on parallel search in sorted arrays, 
+answer static predecessor queries in $O(\log_K\ell)$ rounds when $\ell=O(\lg n)$, and they prove that this is essentially optimal in near-linear space, 
+that is, that $K$ processors can improve the query time by a factor $\lg K$ only (see Section~\ref{sec:rounds} for the statement). 
+In Section~\ref{sec:rounds} we show that the fat binary search of a z-fast trie has the same property, even if the z-map contains just one entry per node, 
+as the queries to the z-map that a search can perform lie on a tree that depends only on the length of the query. In systems, the same phenomenon is known as 
+\emph{memory-level parallelism}, and it is the design principle of the Cuckoo Trie~\cite{Zeitak2021Cuckoo}, which we discuss below.
 
 \paragraph{Strings in the RAM model.} Comparison-based dynamic structures for strings
 have bounds of the form $O(|x|/w+\lg n)$; a recent example with a very small amount of additional information per node is given by 
@@ -2280,6 +2304,177 @@ as $h=0$: the handle whose signature has to be computed can be as long as the ex
 which is not bounded by a function of $|x|$. Options: add to the update bounds of Theorem~\ref{th:boundslong} 
 a term $O(|e_{\mathrm{root}}|/w)$ for the updates that split or remove the root (note that $|e_{\mathrm{root}}|\leq\min\{\?|x^-|,|x^+|\?\}$);
 or find a way to keep enough preprocessed hash state for the extent of the root.}
+
+\section{Fat binary search in rounds}
+\label{sec:rounds}
+
+Algorithms~\ref{algo:parex} and~\ref{algo:exitorparex} are sequential: the interval examined by an iteration 
+depends on the result of the query to the z-map performed by the previous one. In this section we show that, nonetheless, 
+the queries that an execution can perform are known in advance: they are the nodes of a binary tree that depends only on $|x|$, 
+and every execution descends along a branch of that tree. As a consequence, fat binary search can trade queries for 
+\emph{rounds of adaptivity} without any change to the data structure: if $2^s-1$ queries to the z-map can be performed 
+at the same time, about $(\lg|x|)/s$ rounds suffice. 
+
+This property sets z-fast tries apart from the structures in which the address of the next node to be examined is stored in the current one, 
+such as search trees, B-trees and tries traversed from the root, and it is shared with the structures that store all 
+the prefixes of the keys in a dictionary, such as x-fast tries; the z-map, however, contains one entry per internal node. 
+(A sorted array has the same property, as the positions examined by a binary search lie on a fixed tree, but 
+the number of rounds depends on the number of keys, and the structure is static.) 
+It is relevant in at least two settings. On a PRAM, a round is a parallel step: we discuss the known 
+bounds at the end of this section. On current processors, cache misses whose addresses do not depend on each other 
+are served in parallel, so on a large structure the time of a search is close to that of its rounds, 
+rather than that of its memory accesses~\cite{Zeitak2021Cuckoo}.
+
+\begin{definition}[probe tree]
+\label{def:probetree}
+Given integers $0\leq a\leq b$, the \emph{probe tree} $T[a\..b]$ is the binary tree whose nodes are the integers in $[a\..b]$ defined 
+as follows: the root is the 2-fattest number $f$ of $[a\..b]$; the left subtree of the root is $T[a\..f-1]$, 
+and the right subtree is $T[f+1\..b]$ (a subtree is empty if the associated interval is). 
+\end{definition}
+
+A probe tree is a binary search tree on $[a\..b]$; for a node $g$, we denote with $I_g$ the set of nodes of the subtree rooted at $g$, which 
+is an interval in which $g$ is 2-fattest. The \emph{depth} of a node is its distance from the root.
+Since a child is the 2-fattest number of an interval that does not contain its parent, and is contained in an interval in which the parent is 
+2-fattest, the number of trailing zeroes strictly decreases along every path descending from the root (with the proviso that zero is fatter than every positive integer). 
+In particular, the nodes of $T[0\..m]$ have depth at most $\lfloor\lg m\rfloor+1$: the root is zero, its only child is the largest power of two not larger than $m$, 
+and a node of depth $d>0$ has at most $\lfloor\lg m\rfloor+1-d$ trailing zeroes. 
+
+\begin{lemma}
+\label{lemma:descent}
+Let $[a\..b]\subseteq[c\..d]$ be an interval, and let $f$ be the 2-fattest number in $[a\..b]$. Then, $[a\..b]\subseteq I_f$ in $T[c\..d]$.
+Moreover, if $[a'\..b']\subseteq[a\..b]$ is a nonempty interval that does not contain $f$, its 2-fattest number is a proper
+descendant of $f$ in $T[c\..d]$.
+\end{lemma}
+\begin{proof}
+We prove the first statement by induction on the depth of $f$ in $T[c\..d]$. If $f$ is the root, $I_f=[c\..d]$. 
+Otherwise, let $r$ be the root: since $r$ is 2-fattest in $[c\..d]$, if it belonged to $[a\..b]$ it would be 2-fattest therein, 
+whereas $r\neq f$. Thus, $[a\..b]$ lies entirely on one side of $r$, that is, it is a subinterval of $[c\..r-1]$ or of $[r+1\..d]$, 
+and the claim follows by applying the inductive hypothesis to the corresponding subtree. For the second statement, 
+$[a'\..b']$ is a subinterval of $I_f$ that does not contain $f$, so it is contained in the interval associated with the left or with the right subtree of $f$, 
+and so is its 2-fattest number.\qed
+\end{proof}
+
+\begin{theorem}
+\label{th:probetree}
+Let \lst fk be the values assumed by $f$ during an execution of Algorithm~\ref{algo:parex} or 
+Algorithm~\ref{algo:exitorparex} on a string $x$ (in the second case, possibly with a z-map that returns false positives, 
+under the assumptions of Theorem~\ref{th:errors}). Then, for every interval $[c\..d]$ containing the interval $[a\..b]$ with which an iteration starts,
+the values of $f$ from that iteration on are nodes of $T[c\..d]$, and each of them is a proper descendant of the previous one.
+In particular, \lst fk is a descending chain of $T[0\..|x|]$ starting at the root.
+\end{theorem}
+\begin{proof}
+At each iteration $f$ is the 2-fattest number in the current interval $[a\..b]$, and the interval for the following iteration is 
+either $[a\..f-1]$ or $[|e_\beta|+1\..b]$, where $|e_\beta|\geq|h_\beta|=f$: in both cases, it is a subinterval of $[a\..b]$ that does not contain $f$, 
+and the statement follows from Lemma~\ref{lemma:descent}.\qed
+\end{proof}
+
+Theorem~\ref{th:probetree} suggests to modify fat binary search as in Algorithm~\ref{algo:rounds}: at the start of each round we query 
+the z-map with the prefixes of $x$ whose lengths are the nodes of depth less than $s$ of the probe tree of the current interval, and then
+we execute the iterations of Algorithm~\ref{algo:exitorparex} for as long as the results we need are available.
+
+\begin{Algorithm}
+\begin{algorithmic}
+\STATE{\textbf{Function: } LocateExitOrParex in rounds}
+\STATE{\textbf{Input:} a string $x$, an integer $s>0$}
+\STATE{\textbf{Output:} the same as Algorithm~\ref{algo:exitorparex}} 
+\STATE $\Sigma\leftarrow\text{empty stack}$
+\STATE $a, b\leftarrow 0,|x|$
+\WHILE{$a \leq b$}
+	\STATE{$P\leftarrow$ the nodes of $T[a\..b]$ of depth less than $s$}
+	\STATE{$\beta_g\leftarrow Z(x[0\..g))$ for all $g\in P$, in parallel} \COMMENT{A round}
+	\STATE{$f\leftarrow $ the 2-fattest number in $[a\..b]$}
+	\REPEAT
+        \IF{$\beta_f\neq\bot$} 
+        	\STATE $a\leftarrow |e_{\beta_f}| + 1$
+        	\STATE push $\beta_f$ on $\Sigma$
+        \ELSE
+           \STATE $b\leftarrow f - 1$
+        \ENDIF
+        \IF{$a\leq b$}
+		\STATE{$f\leftarrow $ the 2-fattest number in $[a\..b]$}
+	\ENDIF
+	\UNTIL{$a>b$ \OR $f\not\in P$}
+\ENDWHILE
+\STATE{{\bf return} $\Sigma$}
+\end{algorithmic}
+\caption{\label{algo:rounds}Fat binary search with at most $2^s-1$ parallel queries to the z-map per round.}
+\end{Algorithm}
+
+\begin{theorem}
+\label{th:rounds}
+Algorithm~\ref{algo:rounds} performs the same iterations as Algorithm~\ref{algo:exitorparex}, in the same order, and thus 
+returns the same stack. It performs at most 
+\[
+\biggl\lceil\frac{\lfloor\lg|x|\rfloor+2}s\biggr\rceil
+\]
+rounds, each consisting of at most $2^s-1$ queries to the z-map that depend only on $x$ and on the results of the previous rounds.
+\end{theorem}
+\begin{proof}
+The first statement is immediate, as the inner loop executes the body of the loop of Algorithm~\ref{algo:exitorparex} using results 
+that have been obtained in advance; note that a round always executes at least one iteration, as the root of $T[a\..b]$ belongs to $P$. 
+Moreover, $P$ contains at most $2^s-1$ nodes. 
+
+Let now $[a\..b]$ be the interval with which a round starts, $r$ its 2-fattest number, and assume that the round ends with a 
+value of $f$ that is not in $P$, which will be the first value of $f$ for the next round. By Theorem~\ref{th:probetree} (applied with $[c\..d]=[a\..b]$), $f$ is a node of $T[a\..b]$,
+and since it does not belong to $P$ its depth in $T[a\..b]$ is at least $s$. Now, if $v$ is a child of $u$ in $T[a\..b]$, then 
+$v$ is the 2-fattest number in an interval that does not contain $u$ and is contained in $I_u$ (in $T[a\..b]$), in which $u$ is 2-fattest: by 
+Lemma~\ref{lemma:descent} (applied with $[c\..d]=[0\..|x|]$), $v$ is a proper descendant of $u$ in $T[0\..|x|]$. 
+It follows that the depth of $f$ in $T[0\..|x|]$ is larger than that of $r$ by at least $s$. Since the first round starts at the root of $T[0\..|x|]$, the $i$-th round 
+starts with a value of $f$ that has depth at least $(i-1)s$ in $T[0\..|x|]$, and as we remarked depths in $T[0\..|x|]$ are at most $\lfloor\lg|x|\rfloor+1$.\qed
+\end{proof}
+
+A few remarks are in order:
+\begin{itemize}
+\item For $s=1$ we obtain Algorithm~\ref{algo:exitorparex} and its bound on the number of iterations. For $s\geq\lfloor\lg|x|\rfloor+2$ there is a single round, 
+in which the z-map is queried with all the prefixes of $x$, as it would happen in an x-fast trie.
+\item The proof uses only the fact that the root of $T[a\..b]$ belongs to $P$: any choice of $P$ with this property yields a correct 
+algorithm, and the choice determines the number of rounds. For example, if $P$ is the set of the first $s$ nodes of the leftmost branch of $T[a\..b]$, 
+a round performs $s$ queries, and it ends at the first query that does not return $\bot$. Our implementation in Rust (Section~\ref{sec:rust}) 
+uses a sliding version of this strategy: while it performs an iteration, it prefetches the cells of the z-map that the next two iterations 
+will access if the queries fail. 
+\item The same modification can be applied to Algorithm~\ref{algo:parex}, but in that case the tests $e_\beta\prec x$ for the results of a round
+have to be performed before the iterations can be executed, and they access the extents: a round is then made of two batches of accesses.
+\item If the z-map returns false positives, Theorem~\ref{th:errors} and the error handling of Section~\ref{sec:dict} apply without modifications, 
+as the sequence of queries whose results are used, and their results, are the same.
+\item The number of queries performed overall is at most $(2^s-1)\bigl\lceil(\lfloor\lg|x|\rfloor+2)/s\bigr\rceil$, instead of $\lfloor\lg|x|\rfloor+2$: 
+the price of a reduction of the number of rounds by a factor $s$ is exponential in $s$.
+\end{itemize}
+
+\paragraph{Rounds and probes.} Whether a round of Algorithm~\ref{algo:rounds} corresponds to a set of memory accesses 
+that can be performed in parallel depends on the implementation of the z-map. It does if a query to the dictionary accesses a constant number of 
+cells whose addresses depend only on the key and on the description of the hash functions, as it happens, 
+for instance, with Cuckoo hashing~\cite{PaRCH}, and if the result of the query, and in particular $|e_\beta|$, is stored in those cells rather than in the node:
+in this case, once the description of the hash functions has been read, a round consists of $O(2^s)$ accesses to memory cells whose addresses 
+depend only on $x$ and on the content of the cells read in the previous rounds.\footnote{Reading the description of the hash functions requires
+an additional round, and this round cannot be avoided: a static dictionary using a linear number of cells whose queries access cells depending only on the key 
+must access $\Omega(\lg u)$ of them when the universe has size $u\geq n^{1+\epsilon}$ for some $\epsilon>0$ and cells have $\Theta(\lg u)$ bits~\cite{Larsen2024Optimal}.} 
+The hashes of the prefixes of $x$ involved can be computed in constant time each after 
+a preprocessing phase that takes time $O(|x|/w)$ (see Section~\ref{sec:dict}).
+
+\paragraph{Queries.} After Algorithm~\ref{algo:rounds}, a constant number of further rounds, each accessing a constant number of 
+nodes and strings, suffice to locate the exit node (Algorithm~\ref{algo:exit}) and to answer membership queries and existential prefix queries. 
+This is not true of predecessor and successor queries, which have to reach the leftmost or the rightmost leaf under the exit node by following jump pointers:
+the strings associated with the nodes on that path are not prefixes of $x$, so each jump is a round, and there can be $\lfloor\lg|x^\pm|\rfloor+1$ of them. 
+If each internal node contains pointers to its leftmost and rightmost leaf, 
+as it is possible in a static z-fast trie, or in a dynamic one at the price of updates that 
+take time proportional to the height of the trie, predecessor and successor queries need a constant number of further rounds, too. 
+We do not know whether there is a replacement for jump pointers that can be updated in time polylogarithmic in the length of the strings 
+involved, and that makes it possible to reach the leftmost and rightmost leaf under a node in a constant number of rounds.
+
+\paragraph{Lower bounds.} The trade-off of Theorem~\ref{th:rounds} cannot be improved significantly. 
+Afshani and Sitchinava~\cite{Afshani2025Cell} consider a cell-probe version of the PRAM in which at each step $K$ processors with 
+unbounded computational power access $K$ cells of $w$ bits, sharing the results, so that $t$ steps are $t$ rounds of $K$ parallel accesses:
+they prove that for $n$ integers of $\ell=c\lg n$ bits, where $c>1$ is a constant, a static data structure using $\alpha n$ cells requires
+\[
+\Omega\biggl(\log_K\frac{(\hat c-1)\lg n}{\lg\alpha+\lg K+\lg w}\biggr)
+\]
+steps to answer predecessor queries in the worst case, where $\hat c=\min\{\?2,c\?\}$. For linear space, $w=O(\lg n)$ and $K\leq\ell$ this is $\Omega(\log_K\ell)$. As we just discussed, a static z-fast trie on such a set whose internal nodes point 
+to their leftmost and rightmost leaves answers predecessor queries in $O\bigl(1+(\lg\ell)/s\bigr)$ rounds of $O(2^s)$ accesses, that is, 
+in $O(\log_K\ell)$ steps with $1<K\leq\ell$ processors, and it uses linear space; the same lower bound thus applies, up to an additive constant, 
+to the location of the exit node in linear space. The upper bound is not new for integers of fixed length, as it can be obtained using an x-fast trie, and in linear space, in the static case, using a 
+y-fast trie whose buckets are searched in parallel~\cite{Afshani2025Cell}. The z-fast trie attains it without buckets, 
+for strings of arbitrary length, with a number of rounds that depends on the length of the query only, and, for the location of the exit node,
+in the dynamic case.
 
 \section{Space usage}
 \label{sec:spaceusage}
