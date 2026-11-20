@@ -1,0 +1,7 @@
+RESULT method=hot op=insert n=1000000000 ns=687.3 checksum=1000000000
+SPACE method=hot n=1000000000 bytes_per_key=0.0 rss_per_key=29.9
+RESULT method=hot op=contains-hit n=10000000 ns=390.7 checksum=10000000
+RESULT method=hot op=contains-miss n=10000000 ns=391.6 checksum=0
+RESULT method=hot op=succ-hit n=10000000 ns=599.2 checksum=80000000
+RESULT method=hot op=succ-miss n=10000000 ns=622.8 checksum=80000000
+RESULT method=hot op=iterate n=1000000000 ns=37.0 checksum=8000000000

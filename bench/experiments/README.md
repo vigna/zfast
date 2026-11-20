@@ -418,3 +418,25 @@ What the tables say about `ZFastPagedSet`:
 
 Read together with Section 4: these margins come from the segments and the
 pages, not from the router.
+
+**A billion random 64-bit integers** (keys of eight bytes; memory includes the
+keys)
+
+| | add | cont.⁺ | cont.⁻ | succ⁺ | succ⁻ | scan | del | RSS B/key |
+|---|---|---|---|---|---|---|---|---|
+| `ZFastPagedSet` | 827 | 434 | 219 | 528 | 781 | 5.0 | 890 | 31 |
+| Wormhole | 756 | 302 | 243 | 374 | 853 | 17.8 | 648 | 49 |
+| Wormhole, 256 keys per leaf | 742 | 331 | 268 | 404 | 1028 | 11.6 | 689 | 47 |
+| adaptive B-tree | 647 | 607 | 526 | 636 | 614 | 4.5 | 989 | 29 |
+| HOT | 687 | 391 | 392 | 599 | 623 | 37.0 | | 30 |
+| `BTreeSet` | 1550 | 1676 | 1705 | 1737 | 1737 | 19.3 | 1900 | 36 |
+| static z-fast trie, ratio 16 | | 706 | 713 | 710 | 715 | | | 1.4 (index) |
+| binary search | | 1820 | 1814 | 1813 | 1820 | | | |
+
+On short keys of fixed length `ZFastPagedSet` leads only on unsuccessful
+membership (10% over Wormhole); Wormhole leads on successful lookups and
+deletions (30% faster), the B-tree on insertions, unsuccessful successors,
+scans and memory. Its advantages are on long keys, where the prefix shared by
+the keys of a page and the blind directory save comparisons and space. The
+static trie with one key in 16 is 2.6 times faster than a binary search with
+1.4 bytes of index per key.

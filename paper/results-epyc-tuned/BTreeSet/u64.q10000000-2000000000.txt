@@ -1,0 +1,8 @@
+RESULT method=btree op=insert n=1000000000 ns=1549.5 checksum=1000000000
+SPACE method=btree n=1000000000 bytes_per_key=0.0 rss_per_key=36.2
+RESULT method=btree op=contains-hit n=10000000 ns=1676.2 checksum=10000000
+RESULT method=btree op=contains-miss n=10000000 ns=1705.1 checksum=0
+RESULT method=btree op=succ-hit n=10000000 ns=1736.5 checksum=80000000
+RESULT method=btree op=succ-miss n=10000000 ns=1736.6 checksum=80000000
+RESULT method=btree op=iterate n=1000000000 ns=19.3 checksum=8000000000
+RESULT method=btree op=remove n=10000000 ns=1900.1 checksum=10000000
