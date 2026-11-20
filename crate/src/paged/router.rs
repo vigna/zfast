@@ -41,7 +41,13 @@ use std::marker::PhantomData;
 /// children of a node.
 const LEAF: u32 = 1 << 31;
 /// The number of children that are stored in an internal node.
-const INLINE: usize = 6;
+const INLINE: usize = 5;
+/// The number of bytes of an extent following the handle that are stored in
+/// a node.
+const AFTER: usize = 8;
+/// The number of bytes of the string of a leaf following its name that are
+/// stored with the leaf.
+const LEAF_AFTER: usize = 7;
 /// The value of the `len` field of [`Kids`] for nodes whose children are
 /// stored elsewhere.
 const BIG: u8 = u8::MAX;
@@ -140,6 +146,9 @@ struct Node {
     left: u32,
     /// A signature of the extent.
     ext_sig: u32,
+    /// The first bytes of the extent following the handle, padded with
+    /// zeros.
+    after: [u8; AFTER],
     kids: Kids,
 }
 
@@ -152,6 +161,58 @@ struct Link {
     parent: u32,
     /// The previous page, or [`NONE`].
     prev: u32,
+    /// The first bytes of the string of the leaf following its name, padded
+    /// with zeros.
+    after: [u8; LEAF_AFTER],
+    /// The number of bytes in `after`, plus [`WHOLE`] if they are all the
+    /// bytes following the name.
+    meta: u8,
+}
+
+/// The bit of the field `meta` of a [`Link`] saying that the string ends
+/// with the bytes in `after`.
+const WHOLE: u8 = 0x80;
+
+const NO_LINK: Link = Link {
+    parent: NONE,
+    prev: NONE,
+    after: [0; LEAF_AFTER],
+    meta: 0,
+};
+
+/// The relation between a string and the extent of a node, or the string of
+/// a leaf, as far as the bytes stored in the router can tell.
+enum Rel {
+    /// The string is smaller, and the other string is not a prefix of it.
+    Less,
+    /// The string is larger, and the other string is not a prefix of it.
+    Greater,
+    /// The other string is a prefix of the string.
+    Prefix,
+    Unknown,
+}
+
+/// Compares the part of `x` starting at `from` with the `known` bytes of
+/// another string in the same position; `whole` tells whether the other
+/// string ends there.
+#[inline(always)]
+fn relation(x: &[u8], from: usize, known: &[u8], whole: bool) -> Rel {
+    let tail = &x[from..];
+    let n = known.len().min(tail.len());
+    match tail[..n].cmp(&known[..n]) {
+        std::cmp::Ordering::Less => Rel::Less,
+        std::cmp::Ordering::Greater => Rel::Greater,
+        std::cmp::Ordering::Equal => {
+            if n < known.len() {
+                // x is a proper prefix of the other string
+                Rel::Less
+            } else if whole {
+                Rel::Prefix
+            } else {
+                Rel::Unknown
+            }
+        }
+    }
 }
 
 /// The pages that can contain a string, in the order in which they should be
@@ -211,10 +272,7 @@ impl<H: HashPrefixes> Router<H> {
             big: Vec::new(),
             free_big: Vec::new(),
             map: HandleMap::new(),
-            links: vec![Link {
-                parent: NONE,
-                prev: NONE,
-            }],
+            links: vec![NO_LINK],
             root: LEAF,
             max_ext: 0,
             seed: SEED,
@@ -356,31 +414,59 @@ impl<H: HashPrefixes> Router<H> {
         }
         let node = &self.nodes[top as usize];
         let ext = node.ext_len as usize;
-        if ext <= x.len() && (ext == 0 || self.ext_sig_of(hasher.hash(ext)) == node.ext_sig) {
-            // We guess that the extent is a prefix of x
-            let kids = self.view(&node.kids);
-            let (i, found) = kids.position(sym_at(x, ext));
-            if found {
-                let child = kids.ids[i];
-                if is_leaf(child) {
-                    // x follows or precedes the lower fence of the page
-                    let page = child & !LEAF;
-                    Candidates::new(page, self.links[page as usize].prev)
-                } else {
-                    // We guess that x exits in the child, whose extent is
-                    // not a prefix of x: then x follows or precedes all
-                    // strings in the subtree
-                    let child = &self.nodes[child as usize];
-                    Candidates::new(child.last, child.left)
-                }
-            } else if i == 0 {
-                Candidates::new(node.left, NONE)
-            } else {
-                Candidates::new(self.rightmost(kids.ids[i - 1]), NONE)
-            }
+        // The relation between x and the extent: the handle is a prefix of
+        // x (as far as signatures can tell), so we compare what follows
+        let rel = if ext == 0 {
+            Rel::Prefix
         } else {
-            // We guess that x exits at this node
-            Candidates::new(node.last, node.left)
+            let f = two_fattest(node.name_len as usize - 1, ext);
+            let known = AFTER.min(ext - f);
+            match relation(x, f, &node.after[..known], f + known == ext) {
+                Rel::Unknown
+                    if ext <= x.len() && self.ext_sig_of(hasher.hash(ext)) == node.ext_sig =>
+                {
+                    Rel::Prefix
+                }
+                rel => rel,
+            }
+        };
+        match rel {
+            // x precedes or follows all strings in the subtree
+            Rel::Less => Candidates::new(node.left, NONE),
+            Rel::Greater => Candidates::new(node.last, NONE),
+            Rel::Unknown => Candidates::new(node.last, node.left),
+            Rel::Prefix => {
+                let kids = self.view(&node.kids);
+                let (i, found) = kids.position(sym_at(x, ext));
+                if found {
+                    let child = kids.ids[i];
+                    if is_leaf(child) {
+                        // x follows or precedes the string of the leaf
+                        let page = child & !LEAF;
+                        let link = &self.links[page as usize];
+                        if ext == x.len() {
+                            // x is the string of the leaf
+                            return Candidates::new(page, NONE);
+                        }
+                        let known = (link.meta & !WHOLE) as usize;
+                        match relation(x, ext + 1, &link.after[..known], link.meta & WHOLE != 0) {
+                            Rel::Less => Candidates::new(link.prev, NONE),
+                            Rel::Greater | Rel::Prefix => Candidates::new(page, NONE),
+                            Rel::Unknown => Candidates::new(page, link.prev),
+                        }
+                    } else {
+                        // We guess that x exits in the child, whose extent is
+                        // not a prefix of x: then x follows or precedes all
+                        // strings in the subtree
+                        let child = &self.nodes[child as usize];
+                        Candidates::new(child.last, child.left)
+                    }
+                } else if i == 0 {
+                    Candidates::new(node.left, NONE)
+                } else {
+                    Candidates::new(self.rightmost(kids.ids[i - 1]), NONE)
+                }
+            }
         }
     }
 
@@ -475,6 +561,7 @@ impl<H: HashPrefixes> Router<H> {
             last: NONE,
             left: NONE,
             ext_sig,
+            after: [0; AFTER],
             kids,
         })
     }
@@ -576,6 +663,30 @@ impl<H: HashPrefixes> Router<H> {
         }
     }
 
+    /// Sets the bytes following the handle of an internal node, which must
+    /// not be the root, given a string having its extent as a prefix.
+    fn set_after(&mut self, id: u32, extent: &[u8]) {
+        let node = &mut self.nodes[id as usize];
+        let ext = node.ext_len as usize;
+        let f = two_fattest(node.name_len as usize - 1, ext);
+        let known = AFTER.min(ext - f);
+        node.after = [0; AFTER];
+        node.after[..known].copy_from_slice(&extent[f..f + known]);
+    }
+
+    /// Sets the bytes following the name of a leaf, given its string and
+    /// the length of the extent of its parent.
+    fn set_leaf_after(&mut self, page: u32, a: &[u8], parent_ext: usize) {
+        let link = &mut self.links[page as usize];
+        link.after = [0; LEAF_AFTER];
+        // The name of the leaf is the extent of the parent followed by a
+        // symbol, which is the terminator if the string is the extent
+        let tail = a.get(parent_ext + 1..).unwrap_or(&[]);
+        let known = LEAF_AFTER.min(tail.len());
+        link.after[..known].copy_from_slice(&tail[..known]);
+        link.meta = known as u8 | if known == tail.len() { WHOLE } else { 0 };
+    }
+
     /// Recomputes the first and last page, and the page preceding the first
     /// one, of a node and of all its ancestors.
     fn refresh_up(&mut self, mut id: u32) {
@@ -598,7 +709,7 @@ impl<H: HashPrefixes> Router<H> {
         if page == NONE {
             return;
         }
-        let Link { parent, prev } = self.links[page as usize];
+        let Link { parent, prev, .. } = self.links[page as usize];
         let mut id = parent;
         while id != NONE && self.nodes[id as usize].first == page {
             self.nodes[id as usize].left = prev;
@@ -610,13 +721,7 @@ impl<H: HashPrefixes> Router<H> {
     /// `prev` and `next` (the latter can be [`NONE`]).
     pub(super) fn insert(&mut self, page: u32, prev: u32, next: u32, pages: &impl Anchors) {
         if self.links.len() <= page as usize {
-            self.links.resize(
-                page as usize + 1,
-                Link {
-                    parent: NONE,
-                    prev: NONE,
-                },
-            );
+            self.links.resize(page as usize + 1, NO_LINK);
         }
         self.links[page as usize].prev = prev;
         if next != NONE {
@@ -641,6 +746,8 @@ impl<H: HashPrefixes> Router<H> {
             );
             self.links[other as usize].parent = id;
             self.links[page as usize].parent = id;
+            self.set_leaf_after(other, b, l);
+            self.set_leaf_after(page, a, l);
             self.root = id;
             self.refresh_up(id);
             self.fix_left(next);
@@ -674,9 +781,12 @@ impl<H: HashPrefixes> Router<H> {
                 self.map.insert(sig, ext, id);
                 self.nodes[id as usize].name_len = l as u32 + 1;
                 self.nodes[id as usize].parent = new;
+                self.set_after(new, extent);
+                self.set_after(id, extent);
                 let parent_ext = self.nodes[node.parent as usize].ext_len as usize;
                 self.replace_kid(node.parent, sym_at(extent, parent_ext), new);
                 self.links[page as usize].parent = new;
+                self.set_leaf_after(page, a, l);
                 self.refresh_up(new);
                 break;
             }
@@ -686,6 +796,7 @@ impl<H: HashPrefixes> Router<H> {
             if !found {
                 self.add_kid(id, sym, leaf);
                 self.links[page as usize].parent = id;
+                self.set_leaf_after(page, a, ext);
                 self.refresh_up(id);
                 break;
             }
@@ -713,8 +824,11 @@ impl<H: HashPrefixes> Router<H> {
             self.map.insert(sig, l, new);
             self.max_ext = self.max_ext.max(l);
             self.replace_kid(id, sym, new);
+            self.set_after(new, a);
             self.links[other as usize].parent = new;
             self.links[page as usize].parent = new;
+            self.set_leaf_after(other, b, l);
+            self.set_leaf_after(page, a, l);
             self.refresh_up(new);
             break;
         }
@@ -724,7 +838,7 @@ impl<H: HashPrefixes> Router<H> {
     /// Removes a page, which must not be the first one, and whose lower fence
     /// must still be set; `next` is the following page, or [`NONE`].
     pub(super) fn remove(&mut self, page: u32, next: u32, pages: &impl Anchors) {
-        let Link { parent, prev } = self.links[page as usize];
+        let Link { parent, prev, .. } = self.links[page as usize];
         debug_assert!(parent != NONE && prev != NONE);
         let a = pages.low(page);
         let node = self.nodes[parent as usize];
@@ -744,7 +858,12 @@ impl<H: HashPrefixes> Router<H> {
                 self.map.remove(sig, parent);
             }
             if is_leaf(other) {
-                self.links[(other & !LEAF) as usize].parent = node.parent;
+                let other = other & !LEAF;
+                self.links[other as usize].parent = node.parent;
+                if node.parent != NONE {
+                    let parent_ext = self.nodes[node.parent as usize].ext_len as usize;
+                    self.set_leaf_after(other, pages.low(other), parent_ext);
+                }
             } else {
                 // The node below the root of a trie with at least two leaves
                 // cannot become the root, as the extent of the root is empty
@@ -758,6 +877,7 @@ impl<H: HashPrefixes> Router<H> {
                 self.map.insert(sig, child_ext, other);
                 self.nodes[other as usize].name_len = name_len as u32;
                 self.nodes[other as usize].parent = node.parent;
+                self.set_after(other, extent);
             }
             if node.parent == NONE {
                 self.root = other;
@@ -768,10 +888,7 @@ impl<H: HashPrefixes> Router<H> {
             self.free_node(parent);
             node.parent
         };
-        self.links[page as usize] = Link {
-            parent: NONE,
-            prev: NONE,
-        };
+        self.links[page as usize] = NO_LINK;
         if next != NONE {
             self.links[next as usize].prev = prev;
         }
@@ -809,8 +926,16 @@ impl<H: HashPrefixes> Router<H> {
     ) -> usize {
         if is_leaf(id) {
             let page = id & !LEAF;
-            assert_eq!(self.links[page as usize].parent, parent);
+            let link = &self.links[page as usize];
+            assert_eq!(link.parent, parent);
             assert!(rank[page as usize] != usize::MAX);
+            if parent != NONE {
+                let tail = pages.low(page).get(name_len..).unwrap_or(&[]);
+                let known = LEAF_AFTER.min(tail.len());
+                assert_eq!((link.meta & !WHOLE) as usize, known);
+                assert_eq!(link.meta & WHOLE != 0, known == tail.len());
+                assert_eq!(&link.after[..known], &tail[..known]);
+            }
             return 1;
         }
         let node = &self.nodes[id as usize];
@@ -827,6 +952,8 @@ impl<H: HashPrefixes> Router<H> {
             assert!(name_len <= ext);
             assert_eq!(node.ext_sig, self.ext_sig(extent, ext));
             let f = two_fattest(name_len - 1, ext);
+            let known = AFTER.min(ext - f);
+            assert_eq!(&node.after[..known], &extent[f..f + known]);
             let found = self.map.find(self.sig(extent, f), f, |other| other == id);
             assert_eq!(found, Some((ext, id)), "handle not found");
             *handles += 1;

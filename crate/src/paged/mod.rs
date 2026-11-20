@@ -502,6 +502,12 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
     fn page_of(&self, seg: &Segment, x: &[u8]) -> usize {
         let from = seg.candidate(x);
         self.pages.get(seg.page(from)).prefetch_slots();
+        // When the candidate is not the right page, usually that is
+        // because x diverges from the separator of the candidate in the
+        // part that the directory does not know, and it is smaller
+        if from > 0 {
+            self.pages.get(seg.page(from - 1)).prefetch_slots();
+        }
         seg.locate(x, from, &self.pages)
     }
 
@@ -565,6 +571,7 @@ impl<H: HashPrefixes> ZFastPagedSet<H> {
         Iter {
             set: self,
             front: (FIRST, 0, 0),
+            page: None,
             back: self.end(),
             remaining: self.len,
         }
@@ -994,6 +1001,8 @@ pub struct Iter<'a, H> {
     set: &'a ZFastPagedSet<H>,
     /// The position of the next key.
     front: Pos,
+    /// The page of the next key, if it has been accessed.
+    page: Option<&'a Page>,
     /// The position after the next key from the back.
     back: Pos,
     remaining: usize,
@@ -1008,9 +1017,33 @@ impl<'a, H: HashPrefixes> Iterator for Iter<'a, H> {
             return None;
         }
         self.remaining -= 1;
-        let (id, page, key) = self.set.forward(self.front)?;
-        self.front = (id, page, key + 1);
-        self.set.key_at(Some((id, page, key)))
+        loop {
+            if let Some(page) = self.page {
+                if self.front.2 < page.len() {
+                    self.front.2 += 1;
+                    return Some(page.key(self.front.2 - 1));
+                }
+                // The next page
+                let seg = self.set.segs.get(self.front.0);
+                self.front.2 = 0;
+                self.front.1 += 1;
+                if self.front.1 == seg.npages() {
+                    debug_assert!(seg.next != NONE);
+                    self.front = (seg.next, 0, 0);
+                }
+            }
+            let seg = self.set.segs.get(self.front.0);
+            let page = self.set.pages.get(seg.page(self.front.1));
+            self.page = Some(page);
+            // Pages are scattered: we fetch the following one while we
+            // return the keys of this one
+            if self.front.1 + 1 < seg.npages() {
+                self.set
+                    .pages
+                    .get(seg.page(self.front.1 + 1))
+                    .prefetch_all();
+            }
+        }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {

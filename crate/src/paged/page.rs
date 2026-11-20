@@ -353,6 +353,15 @@ impl Page {
         }
     }
 
+    /// Prefetches the whole page.
+    #[inline(always)]
+    pub(super) fn prefetch_all(&self) {
+        let base = self as *const Page as *const u8;
+        for i in 0..PAGE_SIZE / 64 {
+            prefetch(base.wrapping_add(64 * i));
+        }
+    }
+
     /// Prefetches the lines accessed by a binary search.
     #[inline(always)]
     pub(super) fn prefetch_slots(&self) {
