@@ -12,12 +12,15 @@
 #
 # ART needs the headers and the library of TBB.
 
-# Wormhole is compiled with the compiler and the flags of its own Makefile:
-# with clang it is significantly faster than with gcc
-WH_CC ?= clang
+# Wormhole is compiled with the flags of its own Makefile. The compiler
+# matters: on an EPYC 9R45, with 50 million URLs, GCC 16.2 and clang 15 are
+# within 4% of each other (the first is faster on successors, the second on
+# lookups), clang 23.1 is 5% slower than both, and GCC 11 is 20% slower. With
+# an old GCC, use WH_CC=clang.
+WH_CC ?= gcc
 CFLAGS ?= -O3 -DNDEBUG -march=native -flto -fno-stack-protector -std=gnu18 -pthread -w
 # A clang built from source performs link-time optimization only through lld
-WH_LDFLAGS ?= $(shell $(WH_CC) -fuse-ld=lld -Wl,--version 2>/dev/null | grep -q LLD && echo -fuse-ld=lld)
+WH_LDFLAGS ?= $(shell $(WH_CC) --version 2>/dev/null | grep -q clang && $(WH_CC) -fuse-ld=lld -Wl,--version 2>/dev/null | grep -q LLD && echo -fuse-ld=lld)
 WORMHOLE = wormhole
 
 # As in the Makefile of btree-cpp, the B-tree and ART are compiled with
