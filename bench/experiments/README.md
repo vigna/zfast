@@ -328,19 +328,28 @@ The paper (Section "Fat binary search in rounds") proves that the probes of a
 search lie on a tree that depends only on the length of the query, so the top
 *s* levels can be hashed and prefetched at once. The crate implements this as
 the compile-time option `ZFAST_LEVELS` (default 0: the sliding window on the
-failure branch). At 50 million keys, successful / unsuccessful membership:
+failure branch). Successful / unsuccessful membership (`rounds-*`,
+`rounds500-*`):
 
-| levels | `ZFastTrie` | `ZFastSet` | `ZFastPagedSet` (router) |
-|---|---|---|---|
-| 0 (default) | 869 / 776 | 922 / 640 | 461 / 280 (122) |
-| 2 | 875 / 802 | 947 / 664 | 473 / 292 (131) |
-| 4 | 812 / 743 | 1006 / 716 | 518 / 337 (182) |
+| levels (probes per round) | `ZFastTrie`, 50M | `ZFastTrie`, 500M | `ZFastSet`, 50M | `ZFastPagedSet`, 50M (router) |
+|---|---|---|---|---|
+| 0 (default) | 869 / 776 | 957 / 852 | 922 / 640 | 461 / 280 (122) |
+| 2 (3) | 875 / 802 | | 947 / 664 | 473 / 292 (131) |
+| 3 (7) | 830 / 763 | | 972 / 684 | 494 / 314 (158) |
+| 4 (15) | 812 / 743 | 858 / 781 | 1006 / 716 | 518 / 337 (182) |
 
-Full speculation with four levels (15 probes per round) makes the pure trie,
-whose z-map is out of the cache, 4-7% faster; it makes the two structures with
-a small z-map slower, as expected, because the extra hashes buy nothing. The
-run with three levels shared a core with another benchmark and is not valid:
-it must be repeated. Not yet measured at 500 million keys.
+On the pure trie, whose z-map is out of the cache, four levels make lookups
+4-7% faster at 50 million keys and 8-10% faster at 500 million (successor of a
+key in the set: 964 to 861 ns; insertions and deletions gain 3-5%). On the two
+structures with a small z-map every level makes things slower, as expected:
+the extra hashes buy nothing when there are no misses to overlap. The default
+therefore stays at 0, and the option is worth enabling only for a
+`ZFastTrie` much larger than the cache.
+
+The gain is smaller than the reduction of the number of rounds would suggest
+because the default already prefetches the failure branch: a search stalls
+only at its successful probes (2.5 out of 6.4 on average in the router of
+the paged set; not measured on the pure trie).
 
 ## 7. Results with all competitors in their best configuration
 

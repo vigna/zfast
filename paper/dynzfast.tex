@@ -2772,6 +2772,15 @@ A fat binary search on the router performs on average $6.4$ probes of the z-map,
 and it accounts for three quarters of the time of the router; as the router fits the cache, its cost is that of computing hashes and of mispredicted branches, 
 and the rounds of Section~\ref{sec:rounds} give no advantage.
 
+\paragraph{Rounds.} The implementation can optionally prefetch, at each round, the cells of the z-map associated with the first $s$ levels of the probe tree, 
+as in Algorithm~\ref{algo:rounds}, instead of those of the next two iterations along the branch of failures. 
+On the trie with one key per leaf, whose z-map is much larger than the cache, with $s=4$ (that is, $15$ cells per round)
+lookups are $4$--$7$\% faster on $50$ million keys and $8$--$10$\% faster on $500$ million keys, where a successful membership query takes $858$\,ns instead of $957$; 
+updates improve by $3$--$5$\%. On the structures whose z-map fits the cache, instead, every additional level makes queries slower 
+(with $s=4$ a search in the router takes $182$\,ns instead of $122$), as the additional hashes are computed in vain. 
+The improvement is smaller than the reduction in the number of rounds because prefetching the branch of failures 
+already leaves just the successful probes as points in which a search has to wait.
+
 \paragraph{Static structures.} Tables~\ref{tab:ruststat50} and~\ref{tab:ruststat500} show the results for the static case. 
 A static z-fast trie indexing all keys uses $34$ bytes per key, and on $50$ million keys it answers queries from $1.6$ to $1.8$ times faster than a binary search. 
 Indexing one key every $16$ requires just $2$ bytes of index per key, with timings that are from $1.4$ times faster than a binary search on $5$ million keys 

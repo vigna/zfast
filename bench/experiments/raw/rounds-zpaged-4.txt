@@ -1,0 +1,15 @@
+RESULT method=zpaged op=insert n=50000000 ns=877.2 checksum=50000000
+SPACE method=zpaged n=50000000 bytes_per_key=97.3 rss_per_key=97.2
+13725 segments, 78.2 pages per segment, 46.6 keys per page, router: 74.9 bytes per segment
+hits: candidates x (first, second, none): [[0, 0, 0], [8447031, 0, 0], [775888, 777081, 0]]; first page right: 6913362
+misses: candidates x (first, second, none): [[0, 0, 0], [8450954, 0, 0], [773176, 775870, 0]]; first page right: 6924176
+RESULT method=zpaged op=route-hit n=10000000 ns=181.7 checksum=65609579239
+RESULT method=zpaged op=route-miss n=10000000 ns=181.6 checksum=65637704814
+RESULT method=zpaged op=page-hit n=10000000 ns=602.2 checksum=65665465372
+RESULT method=zpaged op=page-miss n=10000000 ns=600.3 checksum=65693036994
+RESULT method=zpaged op=contains-hit n=10000000 ns=517.6 checksum=10000000
+RESULT method=zpaged op=contains-miss n=10000000 ns=337.3 checksum=0
+RESULT method=zpaged op=succ-hit n=10000000 ns=536.3 checksum=753602432
+RESULT method=zpaged op=succ-miss n=10000000 ns=829.7 checksum=753820228
+RESULT method=zpaged op=iterate n=50000000 ns=11.0 checksum=3768378730
+RESULT method=zpaged op=remove n=10000000 ns=629.4 checksum=10000000
