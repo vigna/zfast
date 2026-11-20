@@ -1468,17 +1468,16 @@ has its signature, and a prefix that is not a handle is not, as no handle has it
 
 The argument uses just two properties of the signatures: two distinct strings collide with small probability over a random choice that is
 independent of the strings, and the signature of a prefix can be computed in constant time from preprocessed values. 
-Rabin's fingerprints~\cite{Rabin1981Fingerprinting,Broder1993Some} have the first property: one chooses uniformly at random an irreducible polynomial $P$ of 
+Rabin's fingerprints~\cite{Rabin1981Fingerprinting} have the first property: one chooses uniformly at random an irreducible polynomial $P$ of 
 degree $k$ with coefficients in $\mathbf Z_2$, and the fingerprint of a string is the remainder of the division by $P$ of the polynomial whose 
-coefficients are the bits of the string, preceded by a one~\cite{Broder1993Some}, so that strings of different lengths are associated with different polynomials. 
+coefficients are the bits of the string, preceded by a one so that strings of different lengths are associated with different polynomials~\cite{Broder1993Some}. 
 As for $k\geq 4$ there are at least $2^{k-1}/k$ such $P$, and at most $L/k$ of them divide a nonzero polynomial of degree at most $L$, two distinct strings of 
-length at most $L$ have the same fingerprint with probability at most $2L/2^k$, and the argument above goes through for $2^k\geq 2wLn^c$, that is, with $\lg w$ more bits.
-The fingerprint of a string extended by one bit is obtained by a shift and an exclusive or~\cite{Rabin1981Fingerprinting}, but
-extending it by a word is usually implemented with tables~\cite{Broder1993Some}, 
-or with an instruction multiplying polynomials with coefficients in $\mathbf Z_2$, which is not available in our model: 
-this is why we use polynomials over $\mathbf Z_p$.
-The cyclic redundancy checks used as signatures by some implementations of similar structures, such as Wormhole~\cite{WNJWormhole}, are computed 
-in the same way, but the polynomial is fixed and has degree $32$, so no such bound is available; the same is true of the hash functions
+length at most $L$ have the same fingerprint with probability at most $2L/2^k$, and the argument above goes through for $2^k\geq 2wLn^c$.
+As for the second property, a fingerprint is extended by one bit with a shift and an exclusive or~\cite{Rabin1981Fingerprinting}, 
+but extending it by a word requires in practice tables~\cite{Broder1993Some} or an instruction multiplying polynomials with 
+coefficients in $\mathbf Z_2$, whereas with polynomials over $\mathbf Z_p$ the multiplication of the RAM model is sufficient.
+The cyclic redundancy checks used as signatures by some implementations of similar structures, such as Wormhole~\cite{WNJWormhole}, are 
+fingerprints of the same kind in which the polynomial is fixed and has degree $32$, so no such bound is available; the same is true of the hash functions
 used by our implementations (see Section~\ref{sec:experiments}).
 In any case, the function computing the signatures affects only the running time, as the result of the search is always verified.
 

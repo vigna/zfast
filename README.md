@@ -16,13 +16,20 @@ describes, and a system for comparative benchmarks.
   z-fast trie (`StaticZFastTrie`); see its [README](crate/README.md).
 
 - `bench`: comparative benchmarks against other data structures (at this
-  time, [Wormhole](https://github.com/wuxb45/wormhole) and structures from
-  the Rust standard library); see below.
+  time, [Wormhole](https://github.com/wuxb45/wormhole), the adaptive B-tree
+  of Müller, Benson and Leis, [HOT](https://github.com/speedskater/hot),
+  [ART](https://github.com/flode/ARTSynchronized) and structures from the
+  Rust standard library); see below.
 
 ## Comparative benchmarks
 
-The benchmarks are driven by `bench/run.py`. Competitors are git submodules:
-run `make -C bench init` after cloning.
+The benchmarks are driven by `bench/run.py`. Competitors are git submodules
+(run `make -C bench init` after cloning), with the exception of the code of
+*B-Trees Are Back* (<https://github.com/m-mueller678/btree-cpp>), whose
+repository contains several hundred megabytes of data: the parts we need are
+fetched on demand, at a fixed commit, into `bench/btree-cpp`. The drivers of
+the competitors need Linux on x86-64 with AVX2 and BMI2, `clang++`, `g++`, and
+the headers of Boost and TBB.
 
 ```text
 python3 bench/run.py bench --method all --dataset urls --n 2000000
@@ -40,8 +47,11 @@ same order, and each driver prints checksums that `report` compares. Results
 are stored per data point in `bench/results`, so a campaign can be interrupted
 and resumed.
 
-The tables of the paper are generated from the results stored in
-`paper/results-epyc` (obtained on an AMD EPYC 9R45):
+The runs of the paper are started by `bench/paper.sh URLS [CORE]`, which
+discards the URLs longer than 255 bytes (HOT and the B-tree limit the length
+of the keys) and runs all methods on two sizes. The tables of the paper are
+generated from the results stored in `paper/results-epyc` (obtained on an AMD
+EPYC 9R45):
 
 ```text
 python3 bench/run.py table --results paper/results-epyc --dataset eu-urls \
@@ -49,10 +59,18 @@ python3 bench/run.py table --results paper/results-epyc --dataset eu-urls \
     --out paper/fig/bench-dynamic-10000000.tex
 ```
 
-`bench/zfast-bench` is the Rust driver for the structures of the crate and for
-the baselines from the standard library; `bench/wh_bench.c` is the driver for
-Wormhole. To add a structure, write a driver that reads the same workload
-files and prints the same lines, and add an entry to `bench/configs.py`.
+The drivers are `bench/zfast-bench` (Rust: the structures of the crate and the
+baselines from the standard library), `bench/wh_bench.c` (Wormhole),
+`bench/bt_bench.cpp` (the adaptive B-tree and HOT, through the common
+interface of btree-cpp) and `bench/art_bench.cpp` (ART with optimistic lock
+coupling). To add a structure, write a driver that reads the same workload
+files and prints the same lines (`bench/harness.hpp` contains the code shared
+by the C++ drivers), and add an entry to `bench/configs.py`.
+
+Some limitations of the competitors are documented at the top of each driver:
+in particular, the adapter of HOT has no deletions, ART needs keys without
+zeros, and the ART bundled with btree-cpp is not used because it returns a few
+wrong answers for keys not in the set.
 
 ## License
 

@@ -78,6 +78,8 @@ def cmd_bench(args):
     names = methods(args.method)
     tools = {METHODS[m]["tool"] for m in names}
     targets = ["build/zfast-bench"] + (["build/wh_bench"] if "wormhole" in tools else [])
+    targets += ["build/art_bench"] if "art" in tools else []
+    targets += sorted({"build/bt_bench-" + METHODS[m]["arg"] for m in names if METHODS[m]["tool"] == "btree-cpp"})
     run(["make", "-C", HERE] + targets, args.dry_run)
     pin = shlex.split(args.pin) if args.pin else []
     for dataset in args.dataset.split(","):
@@ -91,6 +93,10 @@ def cmd_bench(args):
                 method = METHODS[name]
                 if method["tool"] == "rust":
                     cmd = [os.path.join(BUILD, "zfast-bench"), "run", method["arg"], prefix, str(args.reps)]
+                elif method["tool"] == "art":
+                    cmd = [os.path.join(BUILD, "art_bench"), prefix, str(args.reps)]
+                elif method["tool"] == "btree-cpp":
+                    cmd = [os.path.join(BUILD, "bt_bench-" + method["arg"]), prefix, str(args.reps)]
                 else:
                     cmd = [os.path.join(BUILD, "wh_bench"), prefix, str(args.reps)]
                 done = run(pin + cmd, args.dry_run, capture_output=True, text=True)

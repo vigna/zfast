@@ -1,3 +1,6 @@
 [submodule "bench/wormhole"]
 	path = bench/wormhole
 	url = https://github.com/wuxb45/wormhole
+[submodule "bench/ARTSynchronized"]
+	path = bench/ARTSynchronized
+	url = https://github.com/flode/ARTSynchronized

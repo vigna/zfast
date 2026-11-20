@@ -15,5 +15,6 @@ paper/dynzfast.pdf
 bench/data
 bench/results
 bench/build
+bench/btree-cpp
 .DS_Store
 __pycache__

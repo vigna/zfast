@@ -4,8 +4,12 @@ Configuration of the comparative benchmarks of z-fast tries.
 Each entry of METHODS specifies:
   - tool: "rust" (the driver zfast-bench, covering the structures of the
     zfast crate and the baselines from the Rust standard library) or
-    "wormhole" (the C driver wh_bench);
-  - arg: for "rust", the name of the method passed to the driver;
+    "wormhole" (the C driver wh_bench), "art" (the C++ driver art_bench) or
+    "btree-cpp" (the C++ driver bt_bench, built once for each configuration of
+    the code of Mueller, Benson and Leis: their adaptive B-tree, and their
+    version of HOT);
+  - arg: for "rust", the name of the method passed to the driver; for
+    "btree-cpp", the name of the configuration;
   - label: the name used in reports;
   - tex: the name used in the tables of the paper (default: the label);
   - kind: "dynamic" or "static" (static structures have no update phases).
@@ -36,6 +40,18 @@ METHODS = {
     "Wormhole": {
         "tool": "wormhole", "kind": "dynamic",
         "label": "Wormhole", "tex": "Wormhole",
+    },
+    "AdaptiveBTree": {
+        "tool": "btree-cpp", "arg": "adapt2", "kind": "dynamic",
+        "label": "adaptive B-tree", "tex": "B-tree~\\cite{Muller2025BTrees}",
+    },
+    "HOT": {
+        "tool": "btree-cpp", "arg": "hot", "kind": "dynamic",
+        "label": "HOT", "tex": "HOT",
+    },
+    "ART": {
+        "tool": "art", "kind": "dynamic",
+        "label": "ART", "tex": "ART",
     },
     "BTreeSet": {
         "tool": "rust", "arg": "btree", "kind": "dynamic",
