@@ -1470,9 +1470,9 @@ The argument uses just two properties of the signatures: two distinct strings co
 independent of the strings, and the signature of a prefix can be computed in constant time from preprocessed values. 
 Rabin's fingerprints~\cite{Rabin1981Fingerprinting,Broder1993Some} have the first property: one chooses uniformly at random an irreducible polynomial $P$ of 
 degree $k$ with coefficients in $\mathbf Z_2$, and the fingerprint of a string is the remainder of the division by $P$ of the polynomial whose 
-coefficients are the bits of the string, preceded by a one, so that strings of different lengths are associated with different polynomials. 
+coefficients are the bits of the string, preceded by a one~\cite{Broder1993Some}, so that strings of different lengths are associated with different polynomials. 
 As for $k\geq 4$ there are at least $2^{k-1}/k$ such $P$, and at most $L/k$ of them divide a nonzero polynomial of degree at most $L$, two distinct strings of 
-length at most $L$ have the same fingerprint with probability at most $2L/2^k$, and the argument above goes through for $2^k\geq 2Ln^c$.
+length at most $L$ have the same fingerprint with probability at most $2L/2^k$, and the argument above goes through for $2^k\geq 2wLn^c$, that is, with $\lg w$ more bits.
 The fingerprint of a string extended by one bit is obtained by a shift and an exclusive or~\cite{Rabin1981Fingerprinting}, but
 extending it by a word is usually implemented with tables~\cite{Broder1993Some}, 
 or with an instruction multiplying polynomials with coefficients in $\mathbf Z_2$, which is not available in our model: 
