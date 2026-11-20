@@ -64,9 +64,10 @@ build/wh_bench-256: build wh_bench.c $(WORMHOLE)/lib.c $(WORMHOLE)/kv.c $(WORMHO
 	grep -q '^#define WH_KPN ((256u))' build/wormhole-256/wh.c
 	$(WH_CC) $(CFLAGS) -Ibuild/wormhole-256 -o $@ wh_bench.c build/wormhole-256/lib.c build/wormhole-256/kv.c build/wormhole-256/wh.c -lm
 
-# The driver for ART (with optimistic lock coupling)
+# The driver for ART (with optimistic lock coupling); its sources lack an
+# include that recent versions of GCC require
 build/art_bench: build art_bench.cpp harness.hpp $(ART)/OptimisticLockCoupling/Tree.cpp
-	$(ART_CXX) $(CXXFLAGS) -I$(ART) -o $@ art_bench.cpp $(ART)/OptimisticLockCoupling/Tree.cpp -ltbb -pthread
+	$(ART_CXX) $(CXXFLAGS) -include cstdint -I$(ART) -o $@ art_bench.cpp $(ART)/OptimisticLockCoupling/Tree.cpp -ltbb -pthread
 
 # The partial, sparse clone of btree-cpp
 $(BTREECPP)/.fetched:
