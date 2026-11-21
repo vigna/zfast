@@ -1,0 +1,6 @@
+RESULT method=szft:16 op=build n=5000000 ns=11.5 checksum=5000000
+SPACE method=szft:16 n=5000000 bytes_per_key=2.0 rss_per_key=0.0
+RESULT method=szft:16 op=contains-hit n=5000000 ns=650.6 checksum=5000000
+RESULT method=szft:16 op=contains-miss n=5000000 ns=633.1 checksum=0
+RESULT method=szft:16 op=succ-hit n=5000000 ns=648.2 checksum=389982678
+RESULT method=szft:16 op=succ-miss n=5000000 ns=635.6 checksum=390171384
